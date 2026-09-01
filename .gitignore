@@ -1,0 +1,16 @@
+﻿# Real customer data -- names + face embedding vectors. Never goes
+# into git history, even on a private repo (see PROGRESS.md).
+inventory.db
+
+# Generated at runtime -- not source, safe to regenerate
+__pycache__/
+*.pyc
+checkout_export/
+pending_duplicates/
+customers/
+temp_enrollment/
+
+# Editor / OS noise
+.vscode/
+.DS_Store
+Thumbs.db

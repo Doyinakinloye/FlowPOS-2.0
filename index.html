@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPOS · Flow pos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+:root{--ink:#F4F6FA;--surface:#FFFFFF;--lift:#F0F3F8;--rule:#E3E8EF;--rule2:#D4DBE5;--prose:#1A2233;--dim:#6B7688;--mute:#A6B0BF;--signal:#0FB89B;--signal-bg:rgba(15,184,155,.10);--amber:#D98A0B;--amber-bg:rgba(217,138,11,.10);--fault:#DC4A42;--fault-bg:rgba(220,74,66,.10);--go:#1FA463;--go-bg:rgba(31,164,99,.10);--purple:#6B5FD6;--font-d:'Space Grotesk',system-ui,sans-serif;--font-b:'Inter',system-ui,sans-serif;--font-m:'JetBrains Mono',monospace;--sw:224px;--th:56px;--r:8px;--rl:12px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-b);background:var(--ink);color:var(--prose);display:flex;height:100vh;overflow:hidden;font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* SIDEBAR */
+.sidebar{width:var(--sw);background:var(--surface);border-right:1px solid var(--rule);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;scrollbar-width:none}
+.sidebar::-webkit-scrollbar{display:none}
+.logo{padding:18px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--signal-bg);border:1px solid rgba(0,229,192,.2);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--signal);flex-shrink:0}
+.logo-text{font-family:var(--font-d);font-weight:700;font-size:14px;color:var(--prose);line-height:1.2}
+.logo-sub{font-size:10px;color:var(--dim);font-family:var(--font-m);letter-spacing:.06em}
+.nav{flex:1;padding:8px 0}
+.nav-gl{padding:14px 16px 4px;font-size:10px;font-family:var(--font-m);color:var(--mute);letter-spacing:.12em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;color:var(--dim);font-size:13px;font-weight:500;transition:background .12s,color .12s;border-left:2px solid transparent;user-select:none}
+.nav-item:hover{color:var(--prose);background:var(--lift)}
+.nav-item.active{color:var(--signal);background:var(--signal-bg);border-left-color:var(--signal)}
+.nav-item .ni{flex-shrink:0;width:16px;height:16px}
+.nav-badge{margin-left:auto;background:var(--amber-bg);color:var(--amber);border-radius:4px;font-size:10px;font-family:var(--font-m);padding:1px 5px;font-weight:600}
+.sb-foot{padding:12px 16px;border-top:1px solid var(--rule);display:flex;flex-direction:column;gap:6px}
+.cs-row{display:flex;align-items:center;justify-content:space-between;font-size:11.5px}
+.cs-label{color:var(--dim);display:flex;align-items:center;gap:6px}
+.cs-val{font-family:var(--font-m);font-size:10px}.cs-val.on{color:var(--go)}.cs-val.off{color:var(--fault)}
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{height:var(--th);padding:0 22px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0}
+.tb-l{display:flex;align-items:center;gap:10px}
+.pg-title{font-family:var(--font-d);font-size:15px;font-weight:600}
+.pg-crumb{font-size:11px;color:var(--dim);font-family:var(--font-m);background:var(--lift);padding:3px 8px;border-radius:4px;border:1px solid var(--rule)}
+.tb-r{display:flex;align-items:center;gap:10px}
+.tb-clock{font-family:var(--font-m);font-size:12px;color:var(--dim)}
+.content{flex:1;overflow-y:auto;padding:20px 22px;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.content::-webkit-scrollbar{width:4px}.content::-webkit-scrollbar-thumb{background:var(--rule2);border-radius:2px}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);border:1px solid transparent;cursor:pointer;font-size:13px;font-family:var(--font-b);font-weight:500;transition:opacity .12s,transform .08s;white-space:nowrap;line-height:1}
+.btn:hover{opacity:.82}.btn:active{transform:scale(.97)}
+.btn svg{width:14px;height:14px;flex-shrink:0}
+.btn-primary{background:var(--signal);color:#fff;border-color:var(--signal)}
+.btn-ghost{background:transparent;color:var(--dim);border-color:var(--rule2)}
+.btn-ghost:hover{color:var(--prose);border-color:var(--dim)}
+.btn-danger{background:var(--fault-bg);color:var(--fault);border-color:rgba(232,82,74,.25)}
+.btn-warn{background:var(--amber-bg);color:var(--amber);border-color:rgba(245,166,35,.25)}
+.btn-sm{padding:5px 10px;font-size:12px}.btn-sm svg{width:12px;height:12px}
+/* PANEL */
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--rl);overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.ph{padding:12px 18px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pt{font-family:var(--font-d);font-size:13px;font-weight:600;color:var(--prose);display:flex;align-items:center;gap:8px}
+.pt svg{width:15px;height:15px;color:var(--dim)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--signal);flex-shrink:0;animation:sonar 2.4s ease-out infinite;box-shadow:0 0 0 0 rgba(15,184,155,.5)}
+@keyframes sonar{0%{box-shadow:0 0 0 0 rgba(15,184,155,.5)}60%{box-shadow:0 0 0 7px rgba(15,184,155,0)}100%{box-shadow:0 0 0 0 rgba(15,184,155,0)}}
+/* TAGS */
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--font-m);white-space:nowrap}
+.tag svg{width:10px;height:10px}
+.tag-go{background:var(--go-bg);color:var(--go)}.tag-fault{background:var(--fault-bg);color:var(--fault)}
+.tag-amber{background:var(--amber-bg);color:var(--amber)}.tag-signal{background:var(--signal-bg);color:var(--signal)}
+.tag-dim{background:var(--lift);color:var(--dim);border:1px solid var(--rule2)}.tag-purple{background:rgba(139,127,240,.1);color:var(--purple)}
+/* TABLES */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--lift)}
+th{padding:9px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:11px 16px;border-bottom:1px solid rgba(30,34,48,.7);vertical-align:middle;font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:rgba(255,255,255,.015)}
+.mono{font-family:var(--font-m);font-size:12px;color:var(--signal)}.dt{color:var(--dim);font-size:12px}
+/* STAT CARDS */
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.sc{background:var(--surface);border:1px solid var(--rule);border-radius:var(--rl);padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.sc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sc-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.sc-icon svg{width:16px;height:16px}
+.sc-icon.signal{background:var(--signal-bg);color:var(--signal)}.sc-icon.go{background:var(--go-bg);color:var(--go)}
+.sc-icon.amber{background:var(--amber-bg);color:var(--amber)}.sc-icon.fault{background:var(--fault-bg);color:var(--fault)}
+.sc-num{font-family:var(--font-d);font-size:28px;font-weight:700;line-height:1}
+.sc-label{font-size:12px;color:var(--dim);margin-top:3px}.sc-foot{margin-top:8px;font-size:11px;color:var(--dim)}
+/* GRIDS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.g2l{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.mb{margin-bottom:16px}
+/* FORM */
+.fr{margin-bottom:14px}
+.fl{display:block;font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.fi{width:100%;background:var(--lift);border:1px solid var(--rule2);border-radius:var(--r);padding:9px 12px;color:var(--prose);font-size:13px;font-family:var(--font-b);outline:none;transition:border-color .15s}
+.fi:focus{border-color:var(--signal)}.fi::placeholder{color:var(--mute)}.fi[readonly]{opacity:.55;cursor:default;color:var(--signal);font-family:var(--font-m)}
+.fh{font-size:11px;color:var(--dim);margin-top:4px}
+select.fi{cursor:pointer}
+/* SEARCHBAR */
+.sbar{padding:11px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;background:var(--lift)}
+.sw{flex:1;position:relative;display:flex;align-items:center}
+.sw svg{position:absolute;left:10px;width:14px;height:14px;color:var(--dim);pointer-events:none}
+.si{width:100%;background:var(--surface);border:1px solid var(--rule2);border-radius:var(--r);padding:7px 12px 7px 34px;color:var(--prose);font-size:13px;font-family:var(--font-b);outline:none}
+.si:focus{border-color:var(--signal)}.si::placeholder{color:var(--mute)}
+select{background:var(--surface);border:1px solid var(--rule2);border-radius:var(--r);padding:7px 12px;color:var(--prose);font-size:12px;font-family:var(--font-b);outline:none;cursor:pointer}
+select:focus{border-color:var(--signal)}
+/* AVATAR */
+.av{width:32px;height:32px;border-radius:50%;background:var(--signal-bg);border:1.5px solid rgba(0,229,192,.2);display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-size:12px;font-weight:600;color:var(--signal);flex-shrink:0}
+.av.unk{background:var(--amber-bg);border-color:rgba(245,166,35,.2);color:var(--amber)}.av.lg{width:48px;height:48px;font-size:16px}
+/* CAMERA WIDGET */
+.cw{background:#1A2233;border-radius:8px;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;border:1px solid var(--rule2)}
+.cw img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.cw.live .cw-scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,var(--signal) 50%,transparent 100%);animation:scandown 4s linear infinite;opacity:.3;z-index:2}
+@keyframes scandown{0%{top:0%}100%{top:100%}}
+.cw-chip{position:absolute;top:10px;left:12px;font-size:10px;font-family:var(--font-m);color:var(--signal);background:rgba(0,0,0,.65);padding:3px 7px;border-radius:4px;display:flex;align-items:center;gap:5px;z-index:3}
+.cw-chip.fault{color:var(--fault)}.cw-chip svg{width:10px;height:10px}
+.cw-sc{position:absolute;top:10px;right:12px;font-size:10px;font-family:var(--font-m);background:rgba(0,0,0,.65);padding:3px 7px;border-radius:4px;display:flex;align-items:center;gap:5px;z-index:3}
+.cw-sc.live{color:var(--go)}.cw-sc.off{color:var(--fault)}
+.cw-off{color:var(--dim);font-size:12px;font-family:var(--font-m);text-align:center;z-index:1}
+.cw-off svg{width:32px;height:32px;display:block;margin:0 auto 8px;opacity:.35}
+.face-guide{width:140px;height:165px;border:1.5px solid var(--signal);border-radius:50%;position:absolute;opacity:.35;z-index:2}
+/* PROGRESS */
+.pt-track{height:3px;background:var(--rule2);border-radius:2px;overflow:hidden}
+.pt-fill{height:100%;background:var(--signal);border-radius:2px;transition:width .3s}
+/* CHECKLIST */
+.cl{list-style:none}.cl li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(30,34,48,.6);font-size:13px;color:var(--dim)}
+.cl li:last-child{border-bottom:none}.cl li.ok{color:var(--prose)}
+.cc{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cc svg{width:10px;height:10px;color:var(--dim);display:none}
+.cl li.ok .cc{background:var(--signal);border-color:var(--signal)}.cl li.ok .cc svg{display:block;color:#fff}
+/* PROC STEPS */
+.pl{list-style:none}
+.pi{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(30,34,48,.5);font-size:13px;color:var(--dim)}
+.pi:last-child{border-bottom:none}.pi.done{color:var(--prose)}.pi.active{color:var(--signal)}
+.psi{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.psi svg{width:16px;height:16px}
+.pi.done .psi{color:var(--go)}.pi.active .psi{color:var(--signal)}.pi .psi{color:var(--mute)}
+.spinner{width:16px;height:16px;border:2px solid var(--rule2);border-top-color:var(--signal);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* ACTIVITY */
+.li{display:flex;gap:12px;align-items:flex-start;padding:10px 18px;border-bottom:1px solid rgba(30,34,48,.5);font-size:12.5px}
+.li:last-child{border-bottom:none}
+.lt{font-family:var(--font-m);font-size:11px;color:var(--dim);flex-shrink:0;width:52px;padding-top:2px}
+.lic{flex-shrink:0;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.lic svg{width:11px;height:11px}
+.lic.go{background:var(--go-bg);color:var(--go)}.lic.amber{background:var(--amber-bg);color:var(--amber)}
+.lic.signal{background:var(--signal-bg);color:var(--signal)}.lic.fault{background:var(--fault-bg);color:var(--fault)}
+.ltx{flex:1;color:var(--prose);line-height:1.45}.ltx em{font-style:normal;color:var(--signal);font-family:var(--font-m);font-size:11px}
+/* CART */
+.cr{display:flex;align-items:center;justify-content:space-between;padding:9px 18px;border-bottom:1px solid rgba(30,34,48,.5);font-size:13px}
+.cr:last-child{border-bottom:none}.crn{display:flex;align-items:center;gap:8px}.crn svg{width:14px;height:14px;color:var(--dim)}
+.cp{font-family:var(--font-m);font-size:13px;color:var(--signal)}
+.ctr{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid var(--rule);font-weight:600}
+.cta{font-family:var(--font-d);font-size:18px;font-weight:700;color:var(--signal)}
+/* SESSION ROW */
+.sr{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid rgba(30,34,48,.5);transition:background .1s}
+.sr:last-child{border-bottom:none}.sr:hover{background:var(--lift)}
+.si2{flex:1;min-width:0}.sn{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sm{font-size:11px;color:var(--dim);margin-top:2px;font-family:var(--font-m)}
+.sr2{text-align:right;flex-shrink:0}
+.st{font-family:var(--font-d);font-size:15px;font-weight:700;color:var(--signal)}.si3{font-size:11px;color:var(--dim);margin-top:1px}
+/* CAPTURE GRID */
+.cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:18px}
+.cc2{background:var(--lift);border:1px solid var(--rule2);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:border-color .15s}
+.cc2:hover{border-color:var(--amber)}
+.ci{aspect-ratio:1;background:#1A2233;display:flex;align-items:center;justify-content:center;position:relative}
+.ci img{width:100%;height:100%;object-fit:cover}
+.ci svg{width:40px;height:40px;color:var(--mute);opacity:.5}
+.cuc{position:absolute;top:7px;left:7px;font-size:9px;font-family:var(--font-m);background:var(--amber-bg);color:var(--amber);padding:2px 6px;border-radius:4px;font-weight:600}
+.cb{padding:10px 12px}.cid{font-family:var(--font-m);font-size:11px;color:var(--amber)}.ctm{font-size:11px;color:var(--dim);margin-top:2px}
+.ca{display:flex;gap:6px;margin-top:8px}.ca .btn{flex:1;justify-content:center}
+/* WIZARD */
+.wiz{display:flex;margin-bottom:20px}
+.ws{flex:1;text-align:center;padding:10px 6px 9px;font-size:11px;font-family:var(--font-m);color:var(--mute);border-bottom:2px solid var(--rule2);letter-spacing:.04em;transition:color .15s,border-color .15s}
+.ws .wn{display:block;font-size:15px;font-family:var(--font-d);font-weight:700;margin-bottom:3px}
+.ws.active{color:var(--signal);border-bottom-color:var(--signal)}.ws.done{color:var(--go);border-bottom-color:var(--go)}
+/* IMG GRID */
+.ig{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.it{aspect-ratio:1;border-radius:6px;background:var(--lift);border:1.5px solid var(--rule2);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;transition:border-color .15s}
+.it svg{width:22px;height:22px;color:var(--mute)}.it.sel{border-color:var(--signal)}
+.ick{position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;background:var(--signal);display:none;align-items:center;justify-content:center}
+.ick svg{width:9px;height:9px;color:#fff}.it.sel .ick{display:flex}
+/* INSTR BANNER */
+.ib{background:var(--signal-bg);border:1px solid rgba(0,229,192,.15);border-radius:var(--r);padding:12px 14px;display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--prose)}
+.ib svg{width:16px;height:16px;color:var(--signal);flex-shrink:0;margin-top:1px}
+/* EMPTY STATE */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:52px 24px;text-align:center;color:var(--dim)}
+.empty svg{width:36px;height:36px;margin-bottom:14px;opacity:.3}
+.et{font-family:var(--font-d);font-size:15px;font-weight:600;color:var(--prose);margin-bottom:6px}
+.es{font-size:13px;color:var(--dim);max-width:280px;line-height:1.55}.empty .btn{margin-top:18px}
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(2px)}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--rule2);border-radius:var(--rl);width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.mh{padding:18px 20px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;font-family:var(--font-d);font-size:15px;font-weight:600}
+.mc{background:none;border:none;color:var(--dim);cursor:pointer;padding:2px}.mc:hover{color:var(--prose)}.mc svg{width:18px;height:18px}
+.mb2{padding:20px}
+/* DETAIL ROW */
+.drow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(30,34,48,.6);font-size:13px}
+.drow:last-child{border-bottom:none}.dl{color:var(--dim)}.dv{font-family:var(--font-m);font-size:12px}
+/* PAGE VIS */
+.page{display:none;animation:fadein .18s ease}.page.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--rule2);border-radius:2px}
+.pad{padding:18px}.pad-sm{padding:12px 18px}
+.g8{display:flex;flex-direction:column;gap:8px}.g12{display:flex;flex-direction:column;gap:12px}
+.fb{display:flex;align-items:center;justify-content:space-between}.fc{display:flex;align-items:center;gap:8px}
+/* TOAST */
+.toast-wrap{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:999}
+.toast{background:var(--lift);border:1px solid var(--rule2);border-radius:var(--r);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;max-width:320px;animation:fadein .2s ease;box-shadow:0 4px 20px rgba(16,24,40,.12)}
+.toast svg{width:16px;height:16px;flex-shrink:0}
+.toast.ok svg{color:var(--go)}.toast.err svg{color:var(--fault)}.toast.info svg{color:var(--signal)}
+/* ERROR BANNER */
+.conn-banner{background:var(--fault-bg);border:1px solid rgba(232,82,74,.25);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--fault);display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.conn-banner svg{width:14px;height:14px;flex-shrink:0}
+.conn-banner.hidden{display:none}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════════ -->
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-icon"><i data-lucide="scan-face" style="width:16px;height:16px"></i></div>
+    <div>
+      <div class="logo-text">Flow pos</div>
+      <div class="logo-sub">FPOS · v4.0</div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-gl">Overview</div>
+    <div class="nav-item active" onclick="nav(this,'overview')"><i data-lucide="layout-dashboard" class="ni"></i> Dashboard</div>
+    <div class="nav-gl">Enrollment</div>
+    <div class="nav-item" onclick="nav(this,'enroll-new')"><i data-lucide="user-plus" class="ni"></i> Enroll Customer</div>
+    <div class="nav-item" onclick="nav(this,'customers')"><i data-lucide="users" class="ni"></i> Customers</div>
+    <div class="nav-gl">Recognition</div>
+    <div class="nav-item" onclick="nav(this,'sessions')"><i data-lucide="radio" class="ni"></i> Active Sessions</div>
+    <div class="nav-item" id="nav-unknowns" onclick="nav(this,'unknowns')"><i data-lucide="user-x" class="ni"></i> Unknown Captures <span class="nav-badge" id="unk-badge" style="display:none">0</span></div>
+    <div class="nav-item" onclick="nav(this,'rec-logs')"><i data-lucide="file-clock" class="ni"></i> Recognition Logs</div>
+    <div class="nav-gl">Item Detection</div>
+    <div class="nav-item" onclick="nav(this,'detected-items')"><i data-lucide="shopping-cart" class="ni"></i> Detected Items</div>
+    <div class="nav-gl">Billing</div>
+    <div class="nav-item" onclick="nav(this,'active-carts')"><i data-lucide="receipt" class="ni"></i> Active Carts</div>
+    <div class="nav-item" onclick="nav(this,'transactions')"><i data-lucide="banknote" class="ni"></i> Transactions</div>
+    <div class="nav-gl">System</div>
+    <div class="nav-item" onclick="nav(this,'cameras')"><i data-lucide="video" class="ni"></i> Cameras</div>
+    <div class="nav-item" onclick="nav(this,'sysinfo')"><i data-lucide="settings" class="ni"></i> System Info</div>
+  </div>
+  <div class="sb-foot">
+    <div class="cs-row">
+      <span class="cs-label"><i data-lucide="video" style="width:12px;height:12px"></i> CAM-01 Recognition</span>
+      <span class="cs-val off" id="sb-cam1">● CHECKING</span>
+    </div>
+    <div class="cs-row">
+      <span class="cs-label"><i data-lucide="video" style="width:12px;height:12px"></i> CAM-02 Detection</span>
+      <span class="cs-val off" id="sb-cam2">● CHECKING</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ══ MAIN ═════════════════════════════════════════════════ -->
+<div class="main">
+  <div class="topbar">
+    <div class="tb-l">
+      <span class="pg-title" id="pg-title">Dashboard</span>
+      <span class="pg-crumb" id="pg-crumb">overview</span>
+    </div>
+    <div class="tb-r">
+      <span class="tag tag-dim" id="autobill-badge" style="display:none"><i data-lucide="zap"></i> Auto-bill</span>
+      <span class="tb-clock" id="clock"></span>
+      <button class="btn btn-ghost btn-sm" onclick="nav(null,'enroll-new')"><i data-lucide="user-plus"></i> Enroll</button>
+      <button class="btn btn-primary btn-sm" id="pipeline-btn" onclick="togglePipeline()"><i data-lucide="play"></i> Start Recognition</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══ OVERVIEW ══════════════════════════════════════════ -->
+    <div class="page active" id="page-overview">
+      <div class="conn-banner hidden" id="conn-err">
+        <i data-lucide="wifi-off"></i>
+        <span>Cannot reach the backend server at <strong>localhost:5000</strong>. Make sure <code>sis_server.py</code> is running.</span>
+      </div>
+      <div class="stats-row">
+        <div class="sc"><div class="sc-top"><div><div class="sc-num" id="s-enrolled" style="color:var(--signal)">—</div><div class="sc-label">Enrolled Customers</div></div><div class="sc-icon signal"><i data-lucide="users"></i></div></div><div class="sc-foot" id="s-enrolled-sub">Loading…</div></div>
+        <div class="sc"><div class="sc-top"><div><div class="sc-num" id="s-sessions" style="color:var(--amber)">—</div><div class="sc-label">Active Sessions</div></div><div class="sc-icon amber"><i data-lucide="radio"></i></div></div><div class="sc-foot">Live recognition</div></div>
+        <div class="sc"><div class="sc-top"><div><div class="sc-num" id="s-tx" style="color:var(--go)">—</div><div class="sc-label">Transactions Today</div></div><div class="sc-icon go"><i data-lucide="banknote"></i></div></div><div class="sc-foot" id="s-revenue">Billing module</div></div>
+        <div class="sc"><div class="sc-top"><div><div style="margin-bottom:6px"><span class="tag" id="stat-cam1">—</span></div><div class="sc-label">Recognition Camera</div></div><div class="sc-icon signal"><i data-lucide="scan-face"></i></div></div><div class="sc-foot" id="s-cam1-url">CAM-01</div></div>
+        <div class="sc"><div class="sc-top"><div><div style="margin-bottom:6px"><span class="tag" id="stat-cam2">—</span></div><div class="sc-label">Detection Camera</div></div><div class="sc-icon fault"><i data-lucide="cctv"></i></div></div><div class="sc-foot" id="s-cam2-url">CAM-02</div></div>
+      </div>
+      <div class="g2 mb">
+        <div class="panel">
+          <div class="ph"><div class="pt"><div class="live-dot"></div> Active Sessions</div><button class="btn btn-ghost btn-sm" onclick="nav(null,'sessions')">View all <i data-lucide="arrow-right"></i></button></div>
+          <div id="ov-sessions"><div class="empty" style="padding:36px 24px"><i data-lucide="radio"></i><div class="et">No active sessions</div><div class="es">Sessions appear here when recognition identifies a customer.</div></div></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="activity"></i> Recent Activity</div><button class="btn btn-ghost btn-sm" onclick="nav(null,'rec-logs')">Full log <i data-lucide="arrow-right"></i></button></div>
+          <div id="ov-log"><div class="empty" style="padding:36px 24px"><i data-lucide="clock"></i><div class="et">No activity yet</div><div class="es">Recognition events appear here in real time.</div></div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="pt"><i data-lucide="receipt"></i> Recent Transactions</div><button class="btn btn-ghost btn-sm" onclick="nav(null,'transactions')">View all <i data-lucide="arrow-right"></i></button></div>
+        <div id="ov-tx"><div class="empty" style="padding:36px 24px"><i data-lucide="banknote"></i><div class="et">No transactions yet</div><div class="es">Completed sessions appear here.</div></div></div>
+      </div>
+    </div>
+
+    <!-- ══ ENROLL NEW ══════════════════════════════════════ -->
+    <div class="page" id="page-enroll-new">
+      <div class="wiz">
+        <div class="ws done"   id="ws1"><span class="wn">01</span> Details</div>
+        <div class="ws active" id="ws2"><span class="wn">02</span> Capture</div>
+        <div class="ws"        id="ws3"><span class="wn">03</span> Processing</div>
+        <div class="ws"        id="ws4"><span class="wn">04</span> Result</div>
+      </div>
+      <div class="g2">
+        <div class="g12">
+          <div class="panel">
+            <div class="ph"><div class="pt"><i data-lucide="user"></i> Customer Details</div></div>
+            <div class="pad">
+              <div class="fr"><label class="fl">Full Name</label><input class="fi" id="e-name" type="text" placeholder="Enter full name"></div>
+              <div class="fr"><label class="fl">Phone <span style="color:var(--mute);text-transform:none;letter-spacing:0">(optional)</span></label><input class="fi" id="e-phone" type="tel" placeholder="+234"></div>
+              <div class="fr"><label class="fl">Customer ID</label><input class="fi" id="e-cid" type="text" readonly><div class="fh">Auto-generated · SI-XXX format</div></div>
+              <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" onclick="startEnrollment()"><i data-lucide="play-circle"></i> Start Enrollment</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="ph"><div class="pt"><div class="live-dot"></div> Camera Checks</div></div>
+            <div class="pad">
+              <ul class="cl">
+                <li id="chk-face"><div class="cc"><i data-lucide="check"></i></div> Face detected</li>
+                <li id="chk-light"><div class="cc"><i data-lucide="check"></i></div> Good lighting</li>
+                <li id="chk-center"><div class="cc"><i data-lucide="check"></i></div> Face centered</li>
+                <li id="chk-ready"><div class="cc"><i data-lucide="check"></i></div> Ready for capture</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="g12">
+          <div class="panel">
+            <div class="ph"><div class="pt"><div class="live-dot"></div> Enrollment Camera</div><span class="tag" id="cam-enroll-badge">Checking…</span></div>
+            <div class="pad">
+              <div class="cw live" id="enroll-cam-widget">
+                <div class="cw-scan"></div>
+                <div class="cw-chip"><i data-lucide="scan-face"></i> CAM-01</div>
+                <div class="cw-sc live" id="enroll-cam-status"><i data-lucide="circle"></i> CONNECTING</div>
+                <div class="face-guide"></div>
+                <div class="cw-off" id="enroll-cam-msg">
+                  <i data-lucide="scan-face"></i>
+                  Waiting for camera…
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ib" id="enroll-instr">
+            <i data-lucide="info"></i>
+            <span>Fill in the customer details then click <strong>Start Enrollment</strong>. The system will guide you through 5 head positions automatically.</span>
+          </div>
+          <div class="panel" id="enroll-prog-panel" style="display:none">
+            <div class="ph"><div class="pt"><i data-lucide="video"></i> Enrollment Progress</div><span class="tag tag-signal" id="enroll-step-tag">Starting…</span></div>
+            <div class="pad g8">
+              <div class="fb"><span style="font-size:12px;color:var(--dim)" id="enroll-step-msg">Initializing…</span><span style="font-size:11px;font-family:var(--font-m);color:var(--dim)" id="enroll-pct">0%</span></div>
+              <div class="pt-track"><div class="pt-fill" id="enroll-bar" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PROCESSING ══════════════════════════════════════ -->
+    <div class="page" id="page-processing">
+      <div style="max-width:420px;margin:48px auto">
+        <div class="panel">
+          <div class="ph"><div class="pt"><div class="live-dot"></div> Processing Enrollment</div></div>
+          <div class="pad">
+            <ul class="pl" id="proc-list">
+              <li class="pi done"><div class="psi"><i data-lucide="check-circle-2"></i></div> Extracting frames</li>
+              <li class="pi done"><div class="psi"><i data-lucide="check-circle-2"></i></div> Quality assessment</li>
+              <li class="pi done"><div class="psi"><i data-lucide="check-circle-2"></i></div> Removing duplicates</li>
+              <li class="pi active" id="ps-selecting"><div class="psi"><div class="spinner"></div></div> Selecting best images</li>
+              <li class="pi" id="ps-embed"><div class="psi"><i data-lucide="circle"></i></div> Generating ArcFace embeddings</li>
+              <li class="pi" id="ps-save"><div class="psi"><i data-lucide="circle"></i></div> Saving customer data</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ENROLLMENT RESULT ══════════════════════════════ -->
+    <div class="page" id="page-enroll-result">
+      <div style="max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="check-circle-2" style="color:var(--go)"></i> Enrollment Complete</div><span class="tag tag-go">Success</span></div>
+          <div class="pad">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+              <div class="av lg" id="r-av">?</div>
+              <div><div style="font-family:var(--font-d);font-size:17px;font-weight:700" id="r-name">—</div><div class="mono" style="margin-top:3px" id="r-id">—</div></div>
+              <div style="margin-left:auto;text-align:right"><div style="font-size:11px;color:var(--dim)">Registered</div><div style="font-size:13px;margin-top:3px" id="r-date">—</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+              <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Status</div><div style="margin-top:6px"><span class="tag tag-go">Enrolled</span></div></div>
+              <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Embeddings</div><div style="font-family:var(--font-d);font-size:18px;font-weight:700;color:var(--signal);margin-top:4px" id="r-emb">—</div></div>
+              <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Duplicate Check</div><div style="margin-top:6px" id="r-dup">—</div></div>
+            </div>
+            <div id="r-dup-warn" style="display:none;margin-top:12px;background:var(--amber-bg);border:1px solid rgba(245,166,35,.25);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--amber)">
+              <strong>Possible duplicate detected.</strong> <span id="r-dup-detail"></span>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="images"></i> Selected Images</div><span style="font-size:11px;color:var(--dim)">Best frames enrolled</span></div>
+          <div class="pad"><div class="ig" id="r-images"></div></div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="resetEnrollment()"><i data-lucide="rotate-ccw"></i> Enroll Another</button>
+          <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="nav(null,'customers')"><i data-lucide="users"></i> View Customers</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CUSTOMERS ═══════════════════════════════════════ -->
+    <div class="page" id="page-customers">
+      <div class="panel">
+        <div class="sbar">
+          <div class="sw"><i data-lucide="search"></i><input class="si" type="text" placeholder="Search by name or ID…" oninput="filterCustomers(this.value)"></div>
+          <select onchange="filterCustomers(document.querySelector('.si').value, this.value)">
+            <option value="">All Status</option><option value="enrolled">Enrolled</option><option value="unknown">Unknown</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="nav(null,'enroll-new')"><i data-lucide="user-plus"></i> Enroll New</button>
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>Customer</th><th>ID</th><th>Registered</th><th>Purchases</th><th>Total Spent</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody id="cust-tbody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ══ ACTIVE SESSIONS ══════════════════════════════════ -->
+    <div class="page" id="page-sessions">
+      <div class="g2l mb">
+        <div class="panel">
+          <div class="ph"><div class="pt"><div class="live-dot"></div> Recognition Camera</div><span class="tag" id="sess-cam-tag">—</span></div>
+          <div class="pad">
+            <div class="cw live" id="sess-cam-widget">
+              <div class="cw-scan"></div>
+              <div class="cw-chip"><i data-lucide="scan-face"></i> CAM-01</div>
+              <div class="cw-sc live" id="sess-cam-sc"><i data-lucide="circle"></i> CONNECTING</div>
+              <div class="cw-off" id="sess-cam-msg"><i data-lucide="scan-face"></i> Waiting for customer…</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="users"></i> Live Sessions</div><span class="tag tag-signal" id="sess-count">0</span></div>
+          <div id="sessions-list"><div class="empty"><i data-lucide="radio"></i><div class="et">No active sessions</div><div class="es">Recognized customers appear here with their live cart totals.</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ UNKNOWN CAPTURES ═════════════════════════════════ -->
+    <div class="page" id="page-unknowns">
+      <div class="panel">
+        <div class="ph"><div class="pt"><i data-lucide="user-x"></i> Unknown Captures</div><span class="tag tag-amber" id="unk-count-tag">0</span></div>
+        <div id="unknowns-empty" class="empty" style="padding:52px 24px"><i data-lucide="user-x"></i><div class="et">No unknown captures</div><div class="es">Unrecognized visitors captured by the recognition camera appear here for review.</div></div>
+        <div class="cg" id="unknown-grid" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ══ RECOGNITION LOGS ══════════════════════════════════ -->
+    <div class="page" id="page-rec-logs">
+      <div class="panel">
+        <div class="sbar"><div class="sw"><i data-lucide="search"></i><input class="si" type="text" placeholder="Filter logs…" oninput="filterLogs(this.value)"></div>
+        <select id="log-filter-event"><option value="">All Events</option><option>CUSTOMER_IDENTIFIED</option><option>CUSTOMER_LEFT</option><option>UNKNOWN_CONFIRMED</option><option>MULTIPLE_FACES</option></select></div>
+        <div class="tw"><table><thead><tr><th>Time</th><th>Event</th><th>Customer</th><th>ID</th><th>Confidence</th></tr></thead><tbody id="log-tbody"></tbody></table></div>
+        <div id="log-empty" class="empty" style="padding:40px 24px"><i data-lucide="file-clock"></i><div class="et">No recognition events</div><div class="es">Events from the recognition camera appear here.</div></div>
+      </div>
+    </div>
+
+    <!-- ══ LIVE MONITOR ══════════════════════════════════════ -->
+    <!-- ══ DETECTED ITEMS ════════════════════════════════════ -->
+    <div class="page" id="page-detected-items">
+      <div class="panel">
+        <div class="sbar"><div class="sw"><i data-lucide="search"></i><input class="si" type="text" placeholder="Search item or customer…"></div><select><option>All</option><option>Taken</option><option>Returned</option></select></div>
+        <div class="tw"><table><thead><tr><th>Time</th><th>Item</th><th>Direction</th><th>Customer</th><th>Price</th><th>Track ID</th></tr></thead><tbody id="det-tbody"></tbody></table></div>
+        <div id="det-empty" class="empty" style="padding:40px 24px"><i data-lucide="shopping-cart"></i><div class="et">No item events</div><div class="es">Item taken/returned events appear here once the detection camera is online.</div></div>
+      </div>
+    </div>
+
+    <!-- ══ ACTIVE CARTS ══════════════════════════════════════ -->
+    <div class="page" id="page-active-carts">
+      <!-- Live billing view: item detection (main) + face recognition (inset) -->
+      <div class="panel mb">
+        <div class="ph"><div class="pt"><i data-lucide="cctv"></i> Live Billing View</div><button class="btn btn-primary btn-sm" id="ac-pipeline-btn" onclick="togglePipeline()"><i data-lucide="play"></i> Start Recognition</button></div>
+        <div class="pad">
+          <div style="position:relative;width:100%">
+            <!-- BIG item-detection feed -->
+            <div class="cw" id="det-cam-widget" style="width:100%">
+              <div class="cw-chip fault"><i data-lucide="cctv"></i> CAM-02 &middot; Item Detection</div>
+              <div class="cw-sc off" id="det-cam-sc"><i data-lucide="circle"></i> OFFLINE</div>
+              <div class="cw-off" id="det-cam-msg"><i data-lucide="wifi-off"></i> Shelf camera&hellip;</div>
+            </div>
+            <!-- SMALL face-recognition inset -->
+            <div class="cw live" id="ac-rec-widget" style="position:absolute;right:16px;bottom:16px;width:27%;min-width:150px;max-width:320px;border:2px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.55);z-index:5">
+              <div class="cw-chip"><i data-lucide="scan-face"></i> CAM-01</div>
+              <div class="cw-sc live" id="ac-rec-sc"><i data-lucide="circle"></i> &mdash;</div>
+              <div class="cw-off" id="ac-rec-msg"><i data-lucide="scan-face"></i> Face cam&hellip;</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+            <span class="tag" id="ac-rec-tag">&mdash;</span>
+            <span style="font-size:12px;color:var(--dim)">Item detection (main) &middot; face recognition (inset)</span>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto;justify-content:center" onclick="reconnectDetectionCam()"><i data-lucide="refresh-cw"></i> Reconnect shelf cam</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel mb" id="manual-bill-panel" style="display:none">
+        <div class="ph"><div class="pt"><i data-lucide="flask-conical"></i> Manual Billing (test without shelf camera)</div><span class="tag tag-amber">Test mode</span></div>
+        <div class="pad">
+          <div style="font-size:12px;color:var(--dim);margin-bottom:12px">Push an item into the currently open session to verify the billing path end-to-end. Same effect as the shelf camera detecting a pickup.</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:1;min-width:160px"><label class="fl">Item</label><select class="fi" id="mb-item"></select></div>
+            <div style="width:140px"><label class="fl">Direction</label><select class="fi" id="mb-dir"><option value="taken">Taken (+)</option><option value="returned">Returned (-)</option></select></div>
+            <button class="btn btn-primary" onclick="manualBill()"><i data-lucide="plus"></i> Bill Item</button>
+          </div>
+        </div>
+      </div>
+      <div id="carts-list"><div class="empty" style="padding:60px 24px"><i data-lucide="shopping-cart"></i><div class="et">No active carts</div><div class="es">Cart totals appear here when customers are in-session and items are detected.</div></div></div>
+    </div>
+
+    <!-- ══ TRANSACTIONS ══════════════════════════════════════ -->
+    <div class="page" id="page-transactions">
+      <div class="panel">
+        <div class="sbar"><div class="sw"><i data-lucide="search"></i><input class="si" type="text" placeholder="Search transactions…"></div><select><option>All</option><option>Known</option><option>Unknown</option></select></div>
+        <div class="tw"><table><thead><tr><th>Customer</th><th>ID</th><th>Items</th><th>Total</th><th>Duration</th><th>Timestamp</th></tr></thead><tbody id="tx-tbody"></tbody></table></div>
+        <div id="tx-empty" class="empty" style="padding:40px 24px"><i data-lucide="banknote"></i><div class="et">No transactions</div><div class="es">Completed sessions appear here.</div></div>
+      </div>
+    </div>
+
+    <!-- ══ CAMERAS ═══════════════════════════════════════════ -->
+    <div class="page" id="page-cameras">
+      <div class="g2">
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="video"></i> CAM-01 &middot; Recognition</div><span class="tag" id="cam1-status-tag">&mdash;</span></div>
+          <div class="pad g12">
+            <div class="cw live" id="cam-page-cam1">
+              <div class="cw-scan"></div>
+              <div class="cw-chip"><i data-lucide="scan-face"></i> CAM-01</div>
+              <div class="cw-sc live" id="cam1-sc">&mdash;</div>
+              <div class="cw-off" id="cam1-msg"><i data-lucide="scan-face"></i> Monitoring&hellip;</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="background:var(--lift);border-radius:8px;padding:11px 14px"><div style="font-size:11px;color:var(--dim)">Model</div><div class="mono" style="font-size:12px;margin-top:4px">ArcFace + MediaPipe</div></div>
+              <div style="background:var(--lift);border-radius:8px;padding:11px 14px"><div style="font-size:11px;color:var(--dim)">Source</div><div class="mono" style="font-size:12px;margin-top:4px" id="cam1-src">&mdash;</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="cctv"></i> CAM-02 &middot; Item Detection</div><span class="tag" id="cam2-status-tag">&mdash;</span></div>
+          <div class="pad g12">
+            <div class="cw" id="cam-page-cam2">
+              <div class="cw-chip fault"><i data-lucide="cctv"></i> CAM-02</div>
+              <div class="cw-sc off" id="cam2-sc">&mdash;</div>
+              <div class="cw-off" id="cam2-msg"><i data-lucide="wifi-off"></i> Offline</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="background:var(--lift);border-radius:8px;padding:11px 14px"><div style="font-size:11px;color:var(--dim)">Model</div><div class="mono" style="font-size:12px;margin-top:4px">YOLOv8n + ByteTrack</div></div>
+              <div style="background:var(--lift);border-radius:8px;padding:11px 14px"><div style="font-size:11px;color:var(--dim)">Source</div><div class="mono" style="font-size:12px;margin-top:4px" id="cam2-src">&mdash;</div></div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="justify-content:center;width:100%" onclick="reconnectDetectionCam()"><i data-lucide="refresh-cw"></i> Reconnect CAM-02</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera Setup, full width below the two feeds -->
+      <div class="panel" style="margin-top:16px">
+        <div class="ph"><div class="pt"><i data-lucide="sliders-horizontal"></i> Camera Setup</div></div>
+        <div class="pad g12">
+          <div style="background:var(--lift);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--dim);line-height:1.6">
+            <strong style="color:var(--prose);display:block;margin-bottom:6px">How to connect</strong>
+            <strong style="color:var(--prose)">Recognition (face) camera:</strong> open DroidCam on your phone, make sure the phone and this laptop are on the <strong style="color:var(--prose)">same Wi-Fi</strong>, then paste the full URL below &mdash; including <code style="color:var(--signal)">http://</code> and <code style="color:var(--signal)">/video</code>. DroidCam's IP changes each reconnect, so re-check it each session.<br><br>
+            <strong style="color:var(--prose)">Detection (shelf) camera:</strong> use a second phone, or fall back to this laptop's webcam if you only have one phone.
+          </div>
+          <div class="fr">
+            <label class="fl">Recognition Camera (face)</label>
+            <input class="fi" id="cfg-cam1" type="text" placeholder="http://10.185.59.112:4747/video">
+            <div class="fh">Full DroidCam URL, e.g. <code>http://&lt;phone-ip&gt;:4747/video</code>. Leave blank to use the laptop webcam.</div>
+          </div>
+          <div class="fr">
+            <label class="fl">Detection Camera (shelf)</label>
+            <select class="fi" id="cfg-cam2-mode" onchange="toggleShelfInput()">
+              <option value="webcam">Use this laptop's webcam (no 2nd phone)</option>
+              <option value="droidcam">Second DroidCam phone (enter URL)</option>
+              <option value="off">Off (test with Manual Billing)</option>
+            </select>
+            <input class="fi" id="cfg-cam2" type="text" placeholder="http://&lt;second-phone-ip&gt;:4747/video" style="display:none;margin-top:8px">
+            <div class="fh" id="cfg-cam2-hint">Falls back to the laptop webcam. If the face camera is also the laptop webcam, the shelf turns off automatically (one webcam can't serve both).</div>
+          </div>
+          <button class="btn btn-primary" style="justify-content:center;width:100%" onclick="updateCameras()"><i data-lucide="save"></i> Apply &amp; Restart Cameras</button>
+        </div>
+      </div>
+
+      <!-- Recognition sensitivity -->
+      <div class="panel" style="margin-top:16px">
+        <div class="ph"><div class="pt"><i data-lucide="scan-face"></i> Recognition Sensitivity</div><span class="tag" id="recog-thr-tag">&mdash;</span></div>
+        <div class="pad g12">
+          <div style="background:var(--lift);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--dim);line-height:1.6">
+            Lower = easier to recognize a known face (but more risk of a wrong match). Higher = stricter. If a known person keeps showing as <strong style="color:var(--prose)">Unknown</strong>, lower this a little. Applies instantly &mdash; no restart.
+          </div>
+          <div class="fr">
+            <label class="fl">Match threshold: <span class="mono" id="recog-thr-val">0.50</span></label>
+            <input id="recog-thr" type="range" min="0.40" max="0.65" step="0.01" value="0.50" style="width:100%" oninput="document.getElementById('recog-thr-val').textContent=(+this.value).toFixed(2)">
+            <div class="fh">Vote floor is set to threshold + 0.05 automatically.</div>
+          </div>
+          <button class="btn btn-primary" style="justify-content:center;width:100%" onclick="updateRecognition()"><i data-lucide="check"></i> Apply Sensitivity</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SYSTEM INFO ════════════════════════════════════════ -->
+    <div class="page" id="page-sysinfo">
+      <div class="g2">
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="cpu"></i> System Configuration</div></div>
+          <div class="pad" id="sysinfo-body">
+            <div class="drow"><span class="dl">Loading…</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><div class="pt"><i data-lucide="package"></i> Price Catalog</div></div>
+          <div class="tw"><table><thead><tr><th>Item</th><th style="text-align:right">Unit Price</th></tr></thead><tbody id="catalog-tbody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ══ CUSTOMER MODAL ════════════════════════════════════════ -->
+<div class="overlay" id="cust-modal">
+  <div class="modal">
+    <div class="mh">Customer Details <button class="mc" onclick="closeModal('cust-modal')"><i data-lucide="x"></i></button></div>
+    <div class="mb2">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+        <div class="av lg" id="m-av">?</div>
+        <div style="flex:1"><div style="font-family:var(--font-d);font-size:17px;font-weight:700" id="m-name">—</div><div class="mono" style="margin-top:3px" id="m-id">—</div></div>
+        <span class="tag" id="m-status">—</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+        <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Registered</div><div style="font-size:13px;margin-top:5px" id="m-date">—</div></div>
+        <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Total Purchases</div><div style="font-family:var(--font-d);font-size:18px;font-weight:700;color:var(--signal);margin-top:4px" id="m-purchases">—</div></div>
+        <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Total Spent</div><div style="font-family:var(--font-d);font-size:18px;font-weight:700;color:var(--go);margin-top:4px" id="m-spent">—</div></div>
+        <div style="background:var(--lift);border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:var(--dim)">Embedding</div><div style="margin-top:5px" id="m-emb">—</div></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-warn btn-sm" style="flex:1;justify-content:center"><i data-lucide="refresh-cw"></i> Re-Enroll</button>
+        <button class="btn btn-danger btn-sm" style="flex:1;justify-content:center" onclick="deleteCustomer()"><i data-lucide="trash-2"></i> Delete</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('cust-modal')"><i data-lucide="x"></i> Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ASSIGN NAME MODAL ═══════════════════════════════════ -->
+<div class="overlay" id="assign-modal">
+  <div class="modal">
+    <div class="mh">Assign Name to Unknown <button class="mc" onclick="closeModal('assign-modal')"><i data-lucide="x"></i></button></div>
+    <div class="mb2">
+      <div class="fr"><label class="fl">Full Name</label><input class="fi" id="assign-name" type="text" placeholder="Enter customer's name"></div>
+      <div class="fr"><label class="fl">New Customer ID <span style="color:var(--mute);text-transform:none;letter-spacing:0">(optional)</span></label><input class="fi" id="assign-new-id" type="text" placeholder="Auto-generated if blank"></div>
+      <input type="hidden" id="assign-old-id">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="closeModal('assign-modal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="submitAssignName()"><i data-lucide="check"></i> Assign Name</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INPUT BROKER MODAL (auto-enrollment prompts) ═══════ -->
+<div class="overlay" id="input-broker-modal">
+  <div class="modal">
+    <div class="mh"><i data-lucide="user-plus" style="width:16px;height:16px;margin-right:6px"></i> New Customer Check-In</div>
+    <div class="mb2">
+      <div class="ib" style="margin-bottom:16px">
+        <i data-lucide="info"></i>
+        <span id="ib-prompt-text">Someone unrecognized just stepped up to Camera 1.</span>
+      </div>
+      <div class="fr">
+        <label class="fl">Response</label>
+        <input class="fi" id="ib-answer" type="text" placeholder="Type your answer…"
+               onkeydown="if(event.key==='Enter') submitInputBrokerAnswer()">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitInputBrokerAnswer()">
+        <i data-lucide="check"></i> Submit
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST CONTAINER ════════════════════════════════════ -->
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const API = "";   // same-origin — served by Flask
+
+// ══════════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════════
+function toast(msg, type = "info") {
+  const icons = { ok: "check-circle", err: "x-circle", info: "info" };
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.innerHTML = `<i data-lucide="${icons[type] || 'info'}"></i><span>${msg}</span>`;
+  document.getElementById("toasts").appendChild(el);
+  lucide.createIcons();
+  setTimeout(() => el.remove(), 4000);
+}
+
+async function api(path, opts = {}) {
+  try {
+    const r = await fetch(API + path, {
+      headers: { "Content-Type": "application/json" },
+      ...opts
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    console.warn("API error:", path, e);
+    return null;
+  }
+}
+
+const initials = n => (n || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+// ══════════════════════════════════════════════════
+//  CLOCK
+// ══════════════════════════════════════════════════
+setInterval(() => {
+  document.getElementById("clock").textContent =
+    new Date().toLocaleTimeString("en-GB", { hour12: false });
+}, 1000);
+
+// ══════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════
+const PAGE_META = {
+  "overview":       { title: "Dashboard",         crumb: "overview" },
+  "enroll-new":     { title: "Enroll Customer",   crumb: "enrollment / new" },
+  "processing":     { title: "Processing",         crumb: "enrollment / processing" },
+  "enroll-result":  { title: "Enrollment Result", crumb: "enrollment / result" },
+  "customers":      { title: "Customers",          crumb: "enrollment / customers" },
+  "sessions":       { title: "Active Sessions",   crumb: "recognition / sessions" },
+  "unknowns":       { title: "Unknown Captures",  crumb: "recognition / unknowns" },
+  "rec-logs":       { title: "Recognition Logs",  crumb: "recognition / logs" },
+  "detected-items": { title: "Detected Items",    crumb: "detection / events" },
+  "active-carts":   { title: "Active Carts",      crumb: "billing / carts" },
+  "transactions":   { title: "Transactions",      crumb: "billing / history" },
+  "cameras":        { title: "Camera Connections",crumb: "system / cameras" },
+  "sysinfo":        { title: "System Info",       crumb: "system / info" },
+};
+
+let currentPage = "overview";
+function nav(el, pageId) {
+  currentPage = pageId;
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  const pg = document.getElementById("page-" + pageId);
+  if (pg) pg.classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  if (el) el.classList.add("active");
+  else document.querySelectorAll(".nav-item").forEach(n => {
+    if ((n.getAttribute("onclick") || "").includes(`'${pageId}'`)) n.classList.add("active");
+  });
+  const m = PAGE_META[pageId] || { title: pageId, crumb: pageId };
+  document.getElementById("pg-title").textContent = m.title;
+  document.getElementById("pg-crumb").textContent = m.crumb;
+  // Always show the correct next staff ID when opening the Enroll page.
+  if (pageId === "enroll-new") initEnrollmentId();
+  setTimeout(() => lucide.createIcons(), 10);
+}
+
+function openModal(id) { document.getElementById(id).classList.add("open"); lucide.createIcons(); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll(".overlay").forEach(o =>
+  o.addEventListener("click", e => { if (e.target === o) o.classList.remove("open"); })
+);
+
+// ══════════════════════════════════════════════════
+//  CAMERA FRAMES (live polling)
+// ══════════════════════════════════════════════════
+function updateCamFrame(frameData, online, widgetId, msgId, scId, chipId) {
+  const widget = document.getElementById(widgetId);
+  const msg    = document.getElementById(msgId);
+  const sc     = document.getElementById(scId);
+  if (!widget) return;
+
+  // Remove existing live img if any
+  let img = widget.querySelector("img");
+
+  if (online && frameData) {
+    if (!img) {
+      img = document.createElement("img");
+      widget.appendChild(img);
+    }
+    img.src = "data:image/jpeg;base64," + frameData;
+    if (msg) msg.style.display = "none";
+    if (sc)  { sc.className = "cw-sc live"; sc.innerHTML = `<i data-lucide="circle"></i> ACTIVE`; }
+    widget.classList.add("live");
+  } else {
+    if (img) img.remove();
+    if (msg) msg.style.display = "";
+    if (sc)  { sc.className = "cw-sc off"; sc.innerHTML = `<i data-lucide="circle"></i> OFFLINE`; }
+    widget.classList.remove("live");
+  }
+  lucide.createIcons();
+}
+
+async function pollCameraFrames() {
+  // Recognition cam — used in enroll + sessions + cameras pages
+  const r1 = await api("/api/camera/recognition/frame");
+  if (r1) {
+    updateCamFrame(r1.frame, r1.online, "enroll-cam-widget", "enroll-cam-msg", "enroll-cam-status", null);
+    updateCamFrame(r1.frame, r1.online, "sess-cam-widget", "sess-cam-msg", "sess-cam-sc", null);
+    updateCamFrame(r1.frame, r1.online, "cam-page-cam1", "cam1-msg", "cam1-sc", null);
+    updateCamFrame(r1.frame, r1.online, "ac-rec-widget", "ac-rec-msg", "ac-rec-sc", null);
+    const act = document.getElementById("ac-rec-tag");
+    if (act) { act.className = r1.online ? "tag tag-go" : "tag tag-fault"; act.innerHTML = r1.online ? "Face cam online" : "Face cam offline"; }
+    const b = document.getElementById("cam-enroll-badge");
+    if (b) { b.className = r1.online ? "tag tag-go" : "tag tag-fault"; b.innerHTML = r1.online ? `<i data-lucide="circle"></i> LIVE` : `<i data-lucide="circle"></i> OFFLINE`; }
+    const stag = document.getElementById("sess-cam-tag");
+    if (stag) { stag.className = r1.online ? "tag tag-go" : "tag tag-fault"; stag.innerHTML = r1.online ? "Online" : "Offline"; }
+  }
+  // Detection cam
+  const r2 = await api("/api/camera/detection/frame");
+  if (r2) {
+    updateCamFrame(r2.frame, r2.online, "det-cam-widget", "det-cam-msg", "det-cam-sc", null);
+    updateCamFrame(r2.frame, r2.online, "cam-page-cam2", "cam2-msg", "cam2-sc", null);
+    const dtag = document.getElementById("det-cam-tag");
+    if (dtag) { dtag.className = r2.online ? "tag tag-go" : "tag tag-fault"; dtag.innerHTML = r2.online ? "Online" : "Offline"; }
+  }
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  STATS REFRESH
+// ══════════════════════════════════════════════════
+async function refreshStats() {
+  const data = await api("/api/stats");
+  const errBanner = document.getElementById("conn-err");
+
+  if (!data) {
+    if (errBanner) errBanner.classList.remove("hidden");
+    return;
+  }
+  if (errBanner) errBanner.classList.add("hidden");
+
+  document.getElementById("s-enrolled").textContent  = data.enrolled_customers ?? "—";
+  document.getElementById("s-sessions").textContent  = data.active_sessions ?? "—";
+  document.getElementById("s-tx").textContent        = data.transactions_today ?? "—";
+  document.getElementById("s-enrolled-sub").textContent = `${data.unknown_captures ?? 0} unknown captures`;
+  document.getElementById("s-revenue").textContent   = data.revenue_today ? `₦${data.revenue_today.toLocaleString()} today` : "₦0 today";
+
+  const c1 = data.cameras?.recognition;
+  const c2 = data.cameras?.detection;
+
+  const sc1 = document.getElementById("stat-cam1");
+  const sc2 = document.getElementById("stat-cam2");
+  if (sc1) { sc1.className = c1 ? "tag tag-go" : "tag tag-fault"; sc1.innerHTML = c1 ? `<i data-lucide="circle"></i> ONLINE` : `<i data-lucide="circle"></i> OFFLINE`; }
+  if (sc2) { sc2.className = c2 ? "tag tag-go" : "tag tag-fault"; sc2.innerHTML = c2 ? `<i data-lucide="circle"></i> ONLINE` : `<i data-lucide="circle"></i> OFFLINE`; }
+
+  // Sidebar status
+  const sb1 = document.getElementById("sb-cam1");
+  const sb2 = document.getElementById("sb-cam2");
+  if (sb1) { sb1.className = c1 ? "cs-val on" : "cs-val off"; sb1.textContent = c1 ? "● ONLINE" : "● OFFLINE"; }
+  if (sb2) { sb2.className = c2 ? "cs-val on" : "cs-val off"; sb2.textContent = c2 ? "● ONLINE" : "● OFFLINE"; }
+
+  // Unknown badge in sidebar
+  const unkBadge = document.getElementById("unk-badge");
+  const unkCount = data.unknown_captures || 0;
+  if (unkBadge) { unkBadge.textContent = unkCount; unkBadge.style.display = unkCount > 0 ? "" : "none"; }
+
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  SESSIONS
+// ══════════════════════════════════════════════════
+async function refreshSessions() {
+  const sessions = await api("/api/sessions");
+  if (!sessions) return;
+
+  document.getElementById("sess-count").textContent = `${sessions.length} active`;
+
+  // Overview panel
+  const ovEl = document.getElementById("ov-sessions");
+  if (sessions.length === 0) {
+    ovEl.innerHTML = `<div class="empty" style="padding:36px 24px"><i data-lucide="radio"></i><div class="et">No active sessions</div><div class="es">Sessions appear here when recognition identifies a customer.</div></div>`;
+  } else {
+    ovEl.innerHTML = sessions.map(s => {
+      const isUnk = s.is_unknown;
+      const ini = isUnk ? "?" : initials(s.name);
+      const avCls = isUnk ? "av unk" : "av";
+      const items = Object.keys(s.cart || {}).length;
+      return `<div class="sr">
+        <div class="${avCls}">${ini}</div>
+        <div class="si2"><div class="sn">${s.name}</div><div class="sm">${s.staff_id} · since ${s.start_time}</div></div>
+        <div class="sr2"><div class="st" style="${isUnk ? "color:var(--amber)" : ""}">₦${(s.total || 0).toLocaleString()}</div><div class="si3">${items} item${items !== 1 ? "s" : ""}</div></div>
+      </div>`;
+    }).join("");
+  }
+
+  // Sessions page
+  const slEl = document.getElementById("sessions-list");
+  if (slEl) slEl.innerHTML = ovEl.innerHTML;
+
+  // Active carts page
+  const cartEl = document.getElementById("carts-list");
+  if (cartEl) {
+    if (sessions.length === 0) {
+      cartEl.innerHTML = `<div class="empty" style="padding:60px 24px"><i data-lucide="shopping-cart"></i><div class="et">No active carts</div><div class="es">Cart totals appear here when customers are in-session.</div></div>`;
+    } else {
+      const g = sessions.length === 1 ? "" : sessions.length === 2 ? "g2" : "g3";
+      cartEl.innerHTML = `<div class="${g}" style="margin:0">` + sessions.map(s => {
+        const isUnk = s.is_unknown;
+        const items = Object.entries(s.cart || {});
+        const cartRows = items.map(([name, v]) => `<div class="cr"><div class="crn"><i data-lucide="package"></i>${name.replace(/_/g, " ")}</div><div class="cp">₦${(v.price * v.qty).toLocaleString()} ×${v.qty}</div></div>`).join("") || `<div class="empty" style="padding:24px"><i data-lucide="package"></i><div class="es">No items yet</div></div>`;
+        return `<div class="panel" style="${isUnk ? "border-color:rgba(245,166,35,.3)" : ""}">
+          <div class="ph"><div class="pt">${s.name}</div><span class="mono" style="font-size:11px">${s.staff_id}</span></div>
+          ${cartRows}
+          <div class="ctr"><span>Running Total</span><span class="cta" style="${isUnk ? "color:var(--amber)" : ""}">₦${(s.total || 0).toLocaleString()}</span></div>
+        </div>`;
+      }).join("") + `</div>`;
+    }
+  }
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  RECOGNITION LOGS
+// ══════════════════════════════════════════════════
+async function refreshRecLogs() {
+  const logs = await api("/api/recognition/log");
+  if (!logs) return;
+
+  // Overview log (latest 6)
+  const ovLog = document.getElementById("ov-log");
+  const recent = logs.slice(-6).reverse();
+  if (recent.length === 0) {
+    ovLog.innerHTML = `<div class="empty" style="padding:36px 24px"><i data-lucide="clock"></i><div class="et">No activity yet</div><div class="es">Recognition events appear here in real time.</div></div>`;
+  } else {
+    const eventStyle = {
+      "CUSTOMER_IDENTIFIED": { cls: "go",    icon: "user-check",  label: "Identified" },
+      "CUSTOMER_LEFT":       { cls: "signal", icon: "log-out",     label: "Left" },
+      "UNKNOWN_CONFIRMED":   { cls: "amber",  icon: "user-x",      label: "Unknown" },
+      "MULTIPLE_FACES":      { cls: "fault",  icon: "users",       label: "Multi-face" },
+    };
+    ovLog.innerHTML = recent.map(l => {
+      const es = eventStyle[l.event] || { cls: "signal", icon: "activity", label: l.event };
+      return `<div class="li"><div class="lt">${l.timestamp}</div>
+        <div class="lic ${es.cls}"><i data-lucide="${es.icon}"></i></div>
+        <div class="ltx">${l.name ? `<em>${l.name}</em> ` : ""}${es.label}${l.confidence ? ` · <em>${(l.confidence * 100).toFixed(1)}%</em>` : ""}</div>
+      </div>`;
+    }).join("");
+  }
+
+  // Logs table
+  const tbody = document.getElementById("log-tbody");
+  const empty = document.getElementById("log-empty");
+  if (!logs.length) {
+    if (tbody) tbody.innerHTML = "";
+    if (empty) empty.style.display = "";
+  } else {
+    if (empty) empty.style.display = "none";
+    const eventTag = {
+      "CUSTOMER_IDENTIFIED": "tag-go",
+      "CUSTOMER_LEFT":       "tag-signal",
+      "UNKNOWN_CONFIRMED":   "tag-amber",
+      "MULTIPLE_FACES":      "tag-fault",
+    };
+    if (tbody) tbody.innerHTML = [...logs].reverse().map(l => `<tr>
+      <td class="dt">${l.timestamp}</td>
+      <td><span class="tag ${eventTag[l.event] || "tag-dim"}" style="font-size:10px">${l.event}</span></td>
+      <td>${l.name || "—"}</td>
+      <td class="mono">${l.customer_id || "—"}</td>
+      <td class="dt">${l.confidence ? (l.confidence * 100).toFixed(1) + "%" : "—"}</td>
+    </tr>`).join("");
+  }
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  CUSTOMERS
+// ══════════════════════════════════════════════════
+let customerData = [];
+
+async function loadCustomers() {
+  const data = await api("/api/customers");
+  if (!data) return;
+  customerData = data;
+  renderCustomers(customerData);
+}
+
+function renderCustomers(list) {
+  const tbody = document.getElementById("cust-tbody");
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty" style="padding:40px 24px"><i data-lucide="users"></i><div class="et">No customers enrolled</div><div class="es">Enroll your first customer to get started.</div><button class="btn btn-primary btn-sm" onclick="nav(null,'enroll-new')"><i data-lucide="user-plus"></i> Enroll Customer</button></div></td></tr>`;
+    lucide.createIcons(); return;
+  }
+  tbody.innerHTML = list.map(c => {
+    const isUnk = c.is_unknown;
+    const ini = isUnk ? "?" : initials(c.name);
+    const avCls = isUnk ? "av unk" : "av";
+    const statusTag = isUnk ? `<span class="tag tag-amber">Unknown</span>` : c.has_embedding ? `<span class="tag tag-go">Enrolled</span>` : `<span class="tag tag-fault">No Embedding</span>`;
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="${avCls}">${ini}</div><span style="font-weight:500">${c.name || "Unknown"}</span></div></td>
+      <td class="mono">${c.staff_id}</td>
+      <td class="dt">${c.enrolled_at || "—"}</td>
+      <td class="mono">${c.total_purchases ?? 0}</td>
+      <td class="mono">₦${(c.total_spent || 0).toFixed(2)}</td>
+      <td>${statusTag}</td>
+      <td style="text-align:right"><div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick='openCustomerModal(${JSON.stringify(c).replace(/'/g,"\\'")})'><i data-lucide="eye"></i> View</button>
+        ${isUnk ? `<button class="btn btn-warn btn-sm" onclick='openAssignModal("${c.staff_id}")'><i data-lucide="tag"></i> Name</button>` : `<button class="btn btn-warn btn-sm"><i data-lucide="refresh-cw"></i></button>`}
+        <button class="btn btn-danger btn-sm" onclick='confirmDeleteCustomer("${c.staff_id}","${c.name}")'><i data-lucide="trash-2"></i></button>
+      </div></td>
+    </tr>`;
+  }).join("");
+  lucide.createIcons();
+}
+
+function filterCustomers(q, statusFilter = "") {
+  let list = customerData;
+  if (q) list = list.filter(c =>
+    (c.name || "").toLowerCase().includes(q.toLowerCase()) ||
+    (c.staff_id || "").toLowerCase().includes(q.toLowerCase())
+  );
+  if (statusFilter === "enrolled") list = list.filter(c => !c.is_unknown && c.has_embedding);
+  if (statusFilter === "unknown") list = list.filter(c => c.is_unknown);
+  renderCustomers(list);
+}
+
+// ══════════════════════════════════════════════════
+//  UNKNOWN CAPTURES
+// ══════════════════════════════════════════════════
+async function refreshUnknowns() {
+  const data = await api("/api/customers");
+  if (!data) return;
+  const unknowns = data.filter(c => c.is_unknown);
+  const unkGrid  = document.getElementById("unknown-grid");
+  const unkEmpty = document.getElementById("unknowns-empty");
+  const unkCountTag = document.getElementById("unk-count-tag");
+  if (unkCountTag) unkCountTag.textContent = unknowns.length;
+
+  if (!unknowns.length) {
+    if (unkGrid) unkGrid.style.display = "none";
+    if (unkEmpty) unkEmpty.style.display = "";
+    return;
+  }
+  if (unkEmpty) unkEmpty.style.display = "none";
+  if (unkGrid) {
+    unkGrid.style.display = "";
+    unkGrid.innerHTML = unknowns.map(u => `
+      <div class="cc2">
+        <div class="ci"><img src="/api/customers/${u.staff_id}/image" onerror="this.remove()" alt=""><span class="cuc">UNKNOWN</span></div>
+        <div class="cb">
+          <div class="cid">${u.staff_id}</div>
+          <div class="ctm">${u.enrolled_at || "—"}</div>
+          <div class="ca">
+            <button class="btn btn-warn btn-sm" onclick='openAssignModal("${u.staff_id}")'>Name</button>
+            <button class="btn btn-danger btn-sm" onclick='confirmDeleteCustomer("${u.staff_id}","Unknown")'><i data-lucide="trash-2"></i></button>
+          </div>
+        </div>
+      </div>`).join("");
+    lucide.createIcons();
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  TRANSACTIONS
+// ══════════════════════════════════════════════════
+async function refreshTransactions() {
+  const txs = await api("/api/transactions");
+  if (!txs) return;
+  const tbody = document.getElementById("tx-tbody");
+  const empty = document.getElementById("tx-empty");
+  if (!txs.length) { if (tbody) tbody.innerHTML = ""; if (empty) empty.style.display = ""; return; }
+  if (empty) empty.style.display = "none";
+  if (tbody) tbody.innerHTML = txs.map(t => {
+    const isUnk = (t.customer_id || "").startsWith("UNK-");
+    const itemCount = Object.values(t.items || {}).reduce((a, v) => a + (typeof v === "number" ? v : (v.qty || 1)), 0);
+    const dur = t.session_duration ? `${t.session_duration.toFixed(0)}s` : "—";
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="${isUnk ? "av unk" : "av"}">${isUnk ? "?" : initials(t.customer_name)}</div><span style="font-weight:500">${t.customer_name}</span></div></td>
+      <td class="mono">${t.customer_id}</td>
+      <td>${itemCount}</td>
+      <td class="mono">₦${(t.total || 0).toLocaleString()}</td>
+      <td class="dt">${dur}</td>
+      <td class="dt">${t.timestamp}</td>
+    </tr>`;
+  }).join("");
+  // Overview (latest 4)
+  const ovTx = document.getElementById("ov-tx");
+  if (ovTx) {
+    if (!txs.length) {
+      ovTx.innerHTML = `<div class="empty" style="padding:36px 24px"><i data-lucide="banknote"></i><div class="et">No transactions yet</div></div>`;
+    } else {
+      ovTx.innerHTML = `<div class="tw"><table><thead><tr><th>Customer</th><th>Items</th><th>Total</th><th>Time</th></tr></thead><tbody>${txs.slice(0,4).map(t => `<tr><td>${t.customer_name}</td><td>${Object.keys(t.items||{}).length}</td><td class="mono">₦${(t.total||0).toLocaleString()}</td><td class="dt">${t.timestamp}</td></tr>`).join("")}</tbody></table></div>`;
+    }
+  }
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  DETECTED ITEMS
+// ══════════════════════════════════════════════════
+async function refreshDetectedItems() {
+  const items = await api("/api/items/detected");
+  if (!items) return;
+  const tbody = document.getElementById("det-tbody");
+  const empty = document.getElementById("det-empty");
+  if (!items.length) { if (tbody) tbody.innerHTML = ""; if (empty) empty.style.display = ""; return; }
+  if (empty) empty.style.display = "none";
+  if (tbody) tbody.innerHTML = [...items].reverse().map(i => `<tr>
+    <td class="dt">${i.time}</td>
+    <td>${(i.item || "").replace(/_/g, " ")}</td>
+    <td><span class="tag ${i.direction === "taken" ? "tag-go" : "tag-fault"}">${i.direction === "taken" ? "↑ Taken" : "↓ Returned"}</span></td>
+    <td class="mono">${i.customer_id || "—"}</td>
+    <td class="mono">₦${(i.price || 0).toLocaleString()}</td>
+    <td class="dt">#${i.track_id || "—"}</td>
+  </tr>`).join("");
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  SYSTEM INFO
+// ══════════════════════════════════════════════════
+async function loadSysInfo() {
+  const info = await api("/api/system/info");
+  if (!info) return;
+  const body = document.getElementById("sysinfo-body");
+  if (body) {
+    const rows = [
+      ["Recognition Camera",  info.recognition_cam],
+      ["Detection Camera",    info.detection_cam],
+      ["Face Detection",      info.face_detection],
+      ["Face Recognition",    info.face_recognition],
+      ["Object Detection",    info.object_detection],
+      ["Enrollment Poses",    (info.enrollment_poses || []).join(" · ")],
+      ["Embeddings / Customer", info.embeddings_per_customer],
+      ["Recognition Threshold", info.recognition_threshold],
+      ["Duplicate Threshold", info.duplicate_threshold],
+      ["Session Grace Period", `${info.session_grace_period_sec}s`],
+      ["ID Format (Known)",   info.id_format_known],
+      ["ID Format (Unknown)", info.id_format_unknown],
+      ["Database",            info.database],
+      ["Currency",            info.currency],
+    ];
+    body.innerHTML = rows.map(([l, v]) => `<div class="drow"><span class="dl">${l}</span><span class="dv">${v || "—"}</span></div>`).join("");
+  }
+  // Camera info page
+  const src1 = document.getElementById("cam1-src");
+  const src2 = document.getElementById("cam2-src");
+  if (src1) src1.textContent = info.recognition_cam;
+  if (src2) src2.textContent = info.detection_cam;
+  // Price catalog
+  const cat = document.getElementById("catalog-tbody");
+  if (info.price_catalog) { priceCatalog = info.price_catalog; populateItemSelect(); }
+  if (cat && info.price_catalog) {
+    cat.innerHTML = Object.entries(info.price_catalog).map(([k, v]) => `<tr><td>${k.replace(/_/g, " ")}</td><td style="text-align:right" class="mono">₦${v.toLocaleString()}</td></tr>`).join("");
+  }
+  // Camera config inputs — only pre-fill when the source is an actual URL
+  const cfg1 = document.getElementById("cfg-cam1");
+  const cfg2 = document.getElementById("cfg-cam2");
+  const cfg2mode = document.getElementById("cfg-cam2-mode");
+  if (cfg1 && /^https?:\/\//.test(info.recognition_cam || "")) cfg1.value = info.recognition_cam;
+  if (cfg2 && cfg2mode) {
+    if (/^https?:\/\//.test(info.detection_cam || "")) {
+      cfg2mode.value = "droidcam"; cfg2.value = info.detection_cam;
+    } else {
+      cfg2mode.value = "webcam";
+    }
+    toggleShelfInput();
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  CUSTOMER MODAL
+// ══════════════════════════════════════════════════
+let activeModalCustomer = null;
+
+function openCustomerModal(c) {
+  activeModalCustomer = c;
+  const isUnk = c.is_unknown;
+  const ini = isUnk ? "?" : initials(c.name);
+  const av = document.getElementById("m-av");
+  av.className = isUnk ? "av lg unk" : "av lg";
+  av.innerHTML = `<img src="/api/customers/${c.staff_id}/image" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" onerror="this.remove();this.parentNode.textContent='${ini}'">`;
+  document.getElementById("m-name").textContent   = c.name || "Unknown";
+  document.getElementById("m-id").textContent     = c.staff_id;
+  document.getElementById("m-date").textContent   = c.enrolled_at || "—";
+  document.getElementById("m-purchases").textContent = c.total_purchases ?? "0";
+  document.getElementById("m-spent").textContent  = `₦${(c.total_spent || 0).toFixed(2)}`;
+  const embEl = document.getElementById("m-emb");
+  embEl.innerHTML = c.has_embedding ? `<span class="tag tag-go">5 / 5</span>` : `<span class="tag tag-fault">None</span>`;
+  const st = document.getElementById("m-status");
+  st.className = isUnk ? "tag tag-amber" : c.has_embedding ? "tag tag-go" : "tag tag-fault";
+  st.textContent = isUnk ? "Unknown" : c.has_embedding ? "Enrolled" : "No Embedding";
+  openModal("cust-modal");
+}
+
+async function deleteCustomer() {
+  if (!activeModalCustomer) return;
+  if (!confirm(`Delete ${activeModalCustomer.name}? This cannot be undone.`)) return;
+  const r = await api(`/api/customers/${activeModalCustomer.staff_id}`, { method: "DELETE" });
+  if (r?.ok) { toast("Customer deleted", "ok"); closeModal("cust-modal"); loadCustomers(); refreshUnknowns(); initEnrollmentId(); }
+  else toast("Delete failed", "err");
+}
+
+async function confirmDeleteCustomer(staffId, name) {
+  if (!confirm(`Delete ${name} (${staffId})? This cannot be undone.`)) return;
+  const r = await api(`/api/customers/${staffId}`, { method: "DELETE" });
+  if (r?.ok) { toast("Customer deleted", "ok"); loadCustomers(); refreshUnknowns(); initEnrollmentId(); }
+  else toast("Delete failed", "err");
+}
+
+// ══════════════════════════════════════════════════
+//  ASSIGN NAME MODAL
+// ══════════════════════════════════════════════════
+function openAssignModal(staffId) {
+  document.getElementById("assign-old-id").value = staffId;
+  document.getElementById("assign-name").value = "";
+  document.getElementById("assign-new-id").value = "";
+  openModal("assign-modal");
+}
+
+async function submitAssignName() {
+  const oldId  = document.getElementById("assign-old-id").value;
+  const name   = document.getElementById("assign-name").value.trim();
+  const newId  = document.getElementById("assign-new-id").value.trim();
+  if (!name) { toast("Name is required", "err"); return; }
+  const r = await api(`/api/customers/${oldId}/rename`, {
+    method: "POST",
+    body: JSON.stringify({ name, new_id: newId || undefined })
+  });
+  if (r?.ok) { toast(`Name assigned: ${name}`, "ok"); closeModal("assign-modal"); loadCustomers(); refreshUnknowns(); }
+  else toast("Failed to assign name", "err");
+}
+
+// ══════════════════════════════════════════════════
+//  CAMERAS
+// ══════════════════════════════════════════════════
+function toggleShelfInput() {
+  const mode  = document.getElementById("cfg-cam2-mode")?.value;
+  const input = document.getElementById("cfg-cam2");
+  const hint  = document.getElementById("cfg-cam2-hint");
+  if (!input) return;
+  if (mode === "droidcam") {
+    input.style.display = "";
+    if (hint) hint.textContent = "Enter the second phone's full DroidCam URL.";
+  } else {
+    input.style.display = "none";
+    if (hint) hint.textContent = mode === "off"
+      ? "Shelf camera off — use the Manual Billing panel on Active Carts to test."
+      : "Falls back to the laptop webcam. If the face camera is also the laptop webcam, the shelf turns off automatically.";
+  }
+}
+
+// Resolve the shelf camera value from the dropdown + optional URL.
+function shelfCamValue() {
+  const mode = document.getElementById("cfg-cam2-mode")?.value || "webcam";
+  if (mode === "droidcam") return document.getElementById("cfg-cam2")?.value.trim() || "webcam:1";
+  if (mode === "off")      return "webcam:99";   // an index that won't open -> effectively off
+  return "";   // blank -> laptop webcam index 1 (server resolves)
+}
+
+async function updateCameras() {
+  const cam1 = document.getElementById("cfg-cam1")?.value.trim() || null;
+  const cam2 = shelfCamValue();
+  const r = await api("/api/config/cameras", {
+    method: "POST",
+    body: JSON.stringify({ recognition: cam1, detection: cam2 })
+  });
+  if (!r?.ok) { toast("Failed to update cameras", "err"); return; }
+  toast("Cameras applied — starting recognition…", "info");
+
+  // Auto-start the full pipeline so it just runs (like main.py option 6).
+  await refreshPipelineStatus();
+  if (!pipelineRunning) {
+    const s = await api("/api/pipeline/start", { method: "POST" });
+    if (s?.ok) toast("Recognition + billing started", "ok");
+    else toast(s?.message || "Could not start recognition", "err");
+  }
+  setTimeout(refreshPipelineStatus, 800);
+}
+
+async function updateRecognition() {
+  const thr = +document.getElementById("recog-thr").value;
+  const floor = Math.min(thr + 0.05, 0.95);
+  const r = await api("/api/config/recognition", {
+    method: "POST",
+    body: JSON.stringify({ threshold: thr, floor: floor })
+  });
+  if (r?.ok) {
+    toast(`Recognition set — threshold ${r.threshold.toFixed(2)}`, "ok");
+    const t = document.getElementById("recog-thr-tag");
+    if (t) { t.className = "tag tag-go"; t.textContent = r.threshold.toFixed(2); }
+  } else {
+    toast("Failed to set recognition", "err");
+  }
+}
+
+async function loadRecognition() {
+  const r = await api("/api/config/recognition");
+  if (!r) return;
+  const sl = document.getElementById("recog-thr");
+  const val = document.getElementById("recog-thr-val");
+  const tag = document.getElementById("recog-thr-tag");
+  if (sl && r.threshold != null) sl.value = r.threshold;
+  if (val && r.threshold != null) val.textContent = (+r.threshold).toFixed(2);
+  if (tag && r.threshold != null) { tag.className = "tag tag-go"; tag.textContent = (+r.threshold).toFixed(2); }
+}
+
+async function reconnectDetectionCam() {
+  const cam2 = shelfCamValue();
+  const r = await api("/api/config/cameras", {
+    method: "POST",
+    body: JSON.stringify({ detection: cam2 })
+  });
+  if (r?.ok) toast("Detection camera reconnecting…", "info");
+  else toast("Reconnect failed", "err");
+}
+
+// ══════════════════════════════════════════════════
+//  INPUT BROKER (auto-enrollment prompts from the background
+//  entrance loop — pops up whenever run_enrollment() is mid-input()
+//  waiting on the browser, with zero changes to entrance.py/enrollment.py)
+// ══════════════════════════════════════════════════
+let ibModalOpen = false;
+
+async function pollInputBroker() {
+  const s = await api("/api/enrollment/status");
+  if (!s) return;
+
+  if (s.waiting_for_input && !ibModalOpen) {
+    document.getElementById("ib-prompt-text").textContent = s.prompt || "Input needed for enrollment.";
+    document.getElementById("ib-answer").value = "";
+    openModal("input-broker-modal");
+    ibModalOpen = true;
+    setTimeout(() => document.getElementById("ib-answer").focus(), 100);
+  } else if (!s.waiting_for_input && ibModalOpen) {
+    closeModal("input-broker-modal");
+    ibModalOpen = false;
+  }
+}
+
+async function submitInputBrokerAnswer() {
+  const answer = document.getElementById("ib-answer").value.trim();
+  const r = await api("/api/enrollment/answer", {
+    method: "POST",
+    body: JSON.stringify({ answer })
+  });
+  if (r?.ok) {
+    closeModal("input-broker-modal");
+    ibModalOpen = false;
+    toast("Submitted — enrollment continuing…", "ok");
+    loadCustomers();
+  } else {
+    toast(r?.error || "Failed to submit answer", "err");
+  }
+}
+
+
+// ══════════════════════════════════════════════════
+//  ENROLLMENT
+
+async function startEnrollment() {
+  const name = document.getElementById("e-name").value.trim();
+  const cid  = document.getElementById("e-cid").value.trim();
+  if (!name) {
+    document.getElementById("e-name").style.borderColor = "var(--fault)";
+    setTimeout(() => document.getElementById("e-name").style.borderColor = "", 1500);
+    return;
+  }
+
+  // Mark ready check
+  const readyEl = document.getElementById("chk-ready");
+  if (readyEl) readyEl.classList.add("ok");
+
+  // Show progress panel
+  document.getElementById("enroll-prog-panel").style.display = "";
+  document.getElementById("enroll-instr").innerHTML = `<i data-lucide="video"></i><span>Enrollment running — follow the head-position prompts shown on the camera preview on this page.</span>`;
+  lucide.createIcons();
+
+  // Call backend
+  const r = await api("/api/enrollment/start", {
+    method: "POST",
+    body: JSON.stringify({ name, staff_id: cid })
+  });
+
+  if (!r?.ok) {
+    toast(r?.error || "Failed to start enrollment", "err");
+    return;
+  }
+
+  toast("Enrollment started — follow the camera prompts", "info");
+
+  // Poll status
+  let pollTimer = setInterval(async () => {
+    const status = await api("/api/enrollment/status");
+    if (!status) return;
+
+    const stepTag = document.getElementById("enroll-step-tag");
+    const stepMsg = document.getElementById("enroll-step-msg");
+    const bar     = document.getElementById("enroll-bar");
+    const pct     = document.getElementById("enroll-pct");
+
+    if (stepTag) stepTag.textContent = status.step || "…";
+    if (stepMsg) stepMsg.textContent = status.message || "…";
+    if (bar) bar.style.width = (status.progress || 0) + "%";
+    if (pct) pct.textContent = (status.progress || 0) + "%";
+
+    // Sync wizard steps to processing page
+    if (["extract", "quality", "dedup", "saving_frames"].includes(status.step)) {
+      nav(null, "processing"); lucide.createIcons();
+    }
+
+    if (!status.running) {
+      clearInterval(pollTimer);
+      if (status.error) {
+        toast("Enrollment failed: " + status.error, "err");
+        nav(null, "enroll-new");
+      } else if (status.result) {
+        const res = status.result;
+        // populate result page
+        document.getElementById("r-av").textContent  = initials(res.name);
+        document.getElementById("r-name").textContent = res.name;
+        document.getElementById("r-id").textContent   = res.staff_id;
+        document.getElementById("r-date").textContent = res.enrolled_at || new Date().toLocaleDateString("en-GB");
+        document.getElementById("r-emb").textContent  = `${res.embeddings} / ${res.embeddings}`;
+        const dupEl = document.getElementById("r-dup");
+        dupEl.innerHTML = res.possible_dup ? `<span class="tag tag-amber">Possible dup</span>` : `<span class="tag tag-go">Clear</span>`;
+        const dupWarn = document.getElementById("r-dup-warn");
+        if (res.possible_dup && dupWarn) {
+          dupWarn.style.display = "";
+          document.getElementById("r-dup-detail").textContent = `Similar to ${res.dup_name} (${res.dup_id}) — similarity ${(res.dup_similarity * 100).toFixed(1)}%`;
+        } else if (dupWarn) { dupWarn.style.display = "none"; }
+        // image placeholders
+        const ig = document.getElementById("r-images");
+        if (ig) ig.innerHTML = Array(res.embeddings || 5).fill(`<div class="it sel"><i data-lucide="user"></i><div class="ick"><i data-lucide="check"></i></div></div>`).join("");
+        nav(null, "enroll-result"); lucide.createIcons();
+        loadCustomers();
+        toast(`${res.name} enrolled successfully!`, "ok");
+      }
+    }
+  }, 1200);
+}
+
+async function resetEnrollment() {
+  document.getElementById("e-name").value = "";
+  document.getElementById("e-phone").value = "";
+  // get new ID
+  const r = await api("/api/enrollment/next-id");
+  if (r) document.getElementById("e-cid").value = r.staff_id;
+  document.getElementById("enroll-prog-panel").style.display = "none";
+  document.getElementById("enroll-bar").style.width = "0%";
+  ["chk-face","chk-light","chk-center"].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove("ok"); });
+  document.getElementById("chk-ready").classList.remove("ok");
+  document.getElementById("enroll-instr").innerHTML = `<i data-lucide="info"></i><span>Fill in the customer details then click <strong>Start Enrollment</strong>.</span>`;
+  nav(null, "enroll-new"); lucide.createIcons();
+}
+
+// Fetch initial next-id on load
+async function initEnrollmentId() {
+  const r = await api("/api/enrollment/next-id");
+  if (r) document.getElementById("e-cid").value = r.staff_id;
+}
+
+// ══════════════════════════════════════════════════
+//  CAMERA STATUS REFRESH
+// ══════════════════════════════════════════════════
+async function refreshCamStatus() {
+  const s = await api("/api/camera/status");
+  if (!s) return;
+  const c1el = document.getElementById("cam1-status-tag");
+  const c2el = document.getElementById("cam2-status-tag");
+  if (c1el) { c1el.className = s.recognition.online ? "tag tag-go" : "tag tag-fault"; c1el.innerHTML = s.recognition.online ? "Online" : "Offline"; }
+  if (c2el) { c2el.className = s.detection.online ? "tag tag-go" : "tag tag-fault"; c2el.innerHTML = s.detection.online ? "Online" : "Offline"; }
+  lucide.createIcons();
+}
+
+// Filter logs
+function filterLogs(q) {
+  const rows = document.querySelectorAll("#log-tbody tr");
+  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? "" : "none"; });
+}
+
+// ══════════════════════════════════════════════════
+//  POLLING LOOP
+// ══════════════════════════════════════════════════
+async function fullRefresh() {
+  await Promise.all([
+    refreshStats(),
+    refreshSessions(),
+    refreshRecLogs(),
+    refreshUnknowns(),
+    refreshTransactions(),
+    refreshDetectedItems(),
+    refreshCamStatus(),
+    refreshPipelineStatus(),
+    loadCustomers(),
+  ]);
+}
+
+// Camera frames polled more frequently
+setInterval(pollCameraFrames, 250);   // 4fps frame preview
+setInterval(pollInputBroker, 800);    // check for auto-enrollment name prompts
+setInterval(fullRefresh, 3000);        // data refresh every 3s
+
+// ══════════════════════════════════════════════════
+//  PIPELINE CONTROL (Recognition + Auto-Billing)
+// ══════════════════════════════════════════════════
+let pipelineRunning = false;
+
+async function togglePipeline() {
+  if (!pipelineRunning) {
+    const r = await api("/api/pipeline/start", { method: "POST" });
+    if (r?.ok) { toast("Recognition + billing started", "ok"); }
+    else { toast(r?.message || "Could not start pipeline", "err"); }
+  } else {
+    const r = await api("/api/pipeline/stop", { method: "POST" });
+    if (r?.ok) toast("Pipeline stopped", "info");
+  }
+  setTimeout(refreshPipelineStatus, 400);
+}
+
+async function refreshPipelineStatus() {
+  const s = await api("/api/pipeline/status");
+  if (!s) return;
+  pipelineRunning = s.running;
+  const btn = document.getElementById("pipeline-btn");
+  const btn2 = document.getElementById("ac-pipeline-btn");
+  [btn, btn2].forEach(b => {
+    if (!b) return;
+    if (s.running) {
+      b.className = "btn btn-danger btn-sm";
+      b.innerHTML = `<i data-lucide="square"></i> Stop Recognition`;
+    } else {
+      b.className = "btn btn-primary btn-sm";
+      b.innerHTML = `<i data-lucide="play"></i> Start Recognition`;
+    }
+  });
+  // auto-bill badge
+  const ab = document.getElementById("autobill-badge");
+  if (ab) {
+    if (s.running && s.auto_billing) { ab.style.display = ""; ab.className = "tag tag-go"; ab.innerHTML = `<i data-lucide="zap"></i> Auto-bill ON`; }
+    else if (s.running && !s.auto_billing) { ab.style.display = ""; ab.className = "tag tag-amber"; ab.innerHTML = `<i data-lucide="zap-off"></i> Manual bill`; }
+    else { ab.style.display = "none"; }
+  }
+  // manual-bill panel visible only when a session can be billed without shelf cam
+  const mbPanel = document.getElementById("manual-bill-panel");
+  if (mbPanel) mbPanel.style.display = (s.running && !s.auto_billing) ? "" : "none";
+  lucide.createIcons();
+}
+
+// ══════════════════════════════════════════════════
+//  MANUAL BILLING (test path)
+// ══════════════════════════════════════════════════
+let priceCatalog = {};
+function populateItemSelect() {
+  const sel = document.getElementById("mb-item");
+  if (!sel || !Object.keys(priceCatalog).length) return;
+  sel.innerHTML = Object.entries(priceCatalog)
+    .map(([k, v]) => `<option value="${k}">${k.replace(/_/g, " ")} — ₦${v}</option>`).join("");
+}
+
+async function manualBill() {
+  const item = document.getElementById("mb-item")?.value;
+  const dir  = document.getElementById("mb-dir")?.value || "taken";
+  if (!item) return;
+  const r = await api("/api/items/manual-bill", {
+    method: "POST", body: JSON.stringify({ item, direction: dir })
+  });
+  if (r?.ok) { toast(`${dir === "taken" ? "Billed" : "Credited"} ${item.replace(/_/g," ")} — total ₦${r.running_total}`, "ok"); refreshSessions(); refreshDetectedItems(); }
+  else toast(r?.error || "Billing failed", "err");
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", async () => {
+  lucide.createIcons();
+  await initEnrollmentId();
+  await loadSysInfo();
+  await loadRecognition();
+  await fullRefresh();
+  pollCameraFrames();
+});
+</script>
+</body>
+</html>

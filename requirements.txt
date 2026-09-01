@@ -1,0 +1,38 @@
+# FlowPOS 2.0 — dependencies
+#
+# Two pins below are evidence-backed, not guessed -- both found by an
+# actual failing install on the real Windows 11 / Python 3.12 target,
+# not by reading docs:
+#   - mediapipe==0.10.21: mediapipe.solutions (mp.solutions.face_detection,
+#     mp.solutions.face_mesh -- what this whole project's face pipeline
+#     depends on) was silently dropped starting ~0.10.30. Confirmed
+#     against multiple live mediapipe GitHub issues, including one on
+#     Windows specifically. 0.10.21 is the version people downgrade to
+#     as the fix, and it has a Python 3.12 wheel (v1's own pin,
+#     mediapipe==0.10.9, does not -- it predates 3.12 wheel support).
+#   - opencv-contrib-python==4.11.0.86: deepface's own dependency chain
+#     pulls in plain opencv-python regardless of what's listed here.
+#     Having both opencv-python and opencv-contrib-python installed at
+#     once corrupts the shared cv2 module they both provide (confirmed:
+#     cv2.VideoCapture existed as a name but wasn't a real class after
+#     that happened). Only one may be installed at a time.
+#
+# Everything else is deliberately unpinned -- letting pip's resolver
+# pick mutually compatible versions of numpy/tensorflow/torch avoided
+# a second round of "pinned version has no wheel for this Python"
+# failures, which is exactly what happened when mediapipe was first
+# pinned to v1's old value.
+#
+# If you ever reinstall from this file, deepface will re-pull plain
+# opencv-python every time -- immediately after, run:
+#   pip uninstall -y opencv-python opencv-contrib-python
+#   pip install opencv-contrib-python==4.11.0.86 --force-reinstall --no-deps
+
+flask
+flask-cors
+opencv-contrib-python==4.11.0.86
+mediapipe==0.10.21
+deepface==0.0.100
+ultralytics
+openpyxl
+numpy
