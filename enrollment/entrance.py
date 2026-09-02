@@ -239,7 +239,9 @@ def start_entrance_engine(camera_index=0):
                                 face_crop = upscaled
                             face_crop = _clahe_preprocess(face_crop)
 
+                        t0 = time.time()
                         emb = _extract_embedding(face_crop) if face_crop is not None else None
+                        print(f"  [timing] embedding extraction took {time.time() - t0:.2f}s")
 
                         if emb is not None:
                             recognition_failures = 0

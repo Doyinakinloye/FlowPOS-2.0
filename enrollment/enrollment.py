@@ -7,6 +7,18 @@
 #   ArcFace embedding generation (DeepFace) → append to embeddings.pkl
 #   and save metadata in face_db.json
 #
+# FIXED 2026-09-01 (later same day) — _detect_faces_mp() used to
+# create a brand-new MediaPipe FaceDetection model on every single
+# call, and it's called once per frame in the capture loop below.
+# Harmless functionally, but wasteful, and confirmed as the source of
+# a real demo recording showing dozens of "Feedback manager..."
+# warnings firing in rapid succession during capture -- one fresh
+# model construction per frame. Now takes the same already-created
+# mp_model the rest of this function already uses (for
+# _mediapipe_face_crop) instead of building its own. Verified with a
+# real executed test: FaceDetection() now constructs exactly once for
+# a full 5-photo enrollment, not once per frame.
+#
 # UPDATED 2026-08-31 (entry flow rework) — three changes, at the
 # user's explicit request:
 #   1. No more name/ID typing. staff_id is auto-generated via
@@ -117,25 +129,22 @@ def _preprocess(frame):
         return frame
     return cv2.resize(frame, (W, H))
 
-def _detect_faces_mp(frame):
-    import mediapipe as mp
-    mp_fd = mp.solutions.face_detection
-    with mp_fd.FaceDetection(model_selection=_MP_MODEL, min_detection_confidence=_MP_CONF) as detector:
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = detector.process(rgb)
-        if not results.detections:
-            return []
-        
-        faces = []
-        for det in results.detections:
-            bb = det.location_data.relative_bounding_box
-            x = int(bb.xmin * W)
-            y = int(bb.ymin * H)
-            w = int(bb.width * W)
-            h = int(bb.height * H)
-            score = det.score[0] if det.score else 0.0
-            faces.append(((x, y, w, h), score))
-        return faces
+def _detect_faces_mp(frame, mp_model):
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = mp_model.process(rgb)
+    if not results.detections:
+        return []
+
+    faces = []
+    for det in results.detections:
+        bb = det.location_data.relative_bounding_box
+        x = int(bb.xmin * W)
+        y = int(bb.ymin * H)
+        w = int(bb.width * W)
+        h = int(bb.height * H)
+        score = det.score[0] if det.score else 0.0
+        faces.append(((x, y, w, h), score))
+    return faces
 
 def _guide_box():
     """Returns (x1, y1, x2, y2) of the centered position-guide box, in frame coords."""
@@ -368,7 +377,7 @@ def run_enrollment(stream_url):
             failed_reads = 0
 
             frame = _preprocess(frame)
-            faces = _detect_faces_mp(frame)
+            faces = _detect_faces_mp(frame, mp_model)
 
             guide_col = COL_GRAY
             msg = "Center your face in the box..."
@@ -395,7 +404,9 @@ def run_enrollment(stream_url):
                             if face_crop is None:
                                 face_crop = upscaled
                             face_crop = _clahe_preprocess(face_crop)
+                            t0 = time.time()
                             emb = _extract_embedding(face_crop)
+                            print(f"  [timing] embedding extraction took {time.time() - t0:.2f}s")
                         else:
                             emb = None
 

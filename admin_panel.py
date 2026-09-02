@@ -6,7 +6,7 @@ Admin Panel — Management & Reporting Utilities
 import os
 import numpy as np
 
-from face_db import get_all_customers, delete_customer, customer_exists, save_customer
+from face_db import get_all_customers, delete_customer, customer_exists, save_customer, get_all_transactions
 from embedding_loader import remove_embedding_from_memory, add_embedding_to_memory
 from services.shopping_session import list_active_sessions
 from services.inventory import get_inventory, set_stock_quantity, add_stock, set_price
@@ -238,6 +238,24 @@ def flagged_enrollments_menu():
             print("Invalid option. Please try again.")
 
 
+def view_transactions():
+    txns = get_all_transactions()   # face_db.py's existing function -- see checkout.py's comment on why reused, not duplicated
+    if not txns:
+        print("\n[Admin] No transactions recorded yet.")
+        return
+
+    print("\n" + "=" * 50)
+    print("   PAST TRANSACTIONS")
+    print("=" * 50)
+    for t in txns:
+        print(f"\n{t['customer_name']} ({t['customer_id']})")
+        print(f"   Time  : {t['timestamp']}  ({t['session_duration']}s)")
+        for it in t['items']:
+            print(f"     {it['qty']}x {it['name']} @ N{it['price']}")
+        print(f"   TOTAL : N{t['total']:.0f}")
+        print("-" * 35)
+
+
 def run_admin_panel():
     while True:
         print("\n" + "=" * 50)
@@ -248,6 +266,7 @@ def run_admin_panel():
         print("  3. Delete Customer Entry")
         print("  4. Check Inventory")
         print("  5. Review Flagged Enrollment")
+        print("  6. View Past Transactions")
         print()
         print("  0. Back to Main Menu")
         print("=" * 50)
@@ -264,6 +283,8 @@ def run_admin_panel():
             inventory_menu()
         elif choice == "5":
             flagged_enrollments_menu()
+        elif choice == "6":
+            view_transactions()
         elif choice == "0":
             break
         else:
