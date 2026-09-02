@@ -57,6 +57,21 @@
 # here. Not clamped at zero on purpose (see the comment at the call
 # site in run_checkout()).
 #
+# FIXED 2026-09-02 (later same day) -- Admin Panel > View All Enrolled
+# Customers always showed Purchases: 0 / Spent: N0.00 even after real
+# transactions -- same root cause as the inventory bug just above.
+# face_db.py already had update_customer_stats(staff_id, amount)
+# ("Called after each transaction" per its own docstring), it just
+# was never actually called from here. Added right next to
+# save_transaction(), same place add_stock() lives.
+#
+# NEW 2026-09-02 (web UI groundwork) -- added an optional event hook,
+# same shape as entrance.py's: fires once per completed sale with
+# {staff_id, name, items, total}, does nothing unless sis_server.py
+# registers a listener. This is what will let the live dashboard show
+# "customer just checked out" in real time later -- zero effect on
+# the terminal flow on its own.
+#
 # Not yet tuned against real footage: CONF_THRESHOLD, the 3-reads
 # stability count, the 0.6s poll interval, and SCAN_TIMEOUT_SEC are
 # reasonable starting values, not calibrated against a real tray under
@@ -95,6 +110,22 @@ MAX_SCAN_ATTEMPTS         = 2   # this scan specifically gets 2 tries total, not
 
 _MODEL = None
 _CHECKOUT_STREAM_SOURCE = None  # cached camera 2 source -- asked once per program run, then reused
+
+# Optional hook, set via set_event_hook(). Fires exactly once per
+# completed sale, with {"staff_id": str, "name": str, "items": list,
+# "total": number}. Does nothing by default -- purely additive, zero
+# effect on the terminal flow unless something (sis_server.py)
+# explicitly registers a hook. Same pattern as entrance.py's hook, for
+# the same reason: a plain True/False return doesn't carry enough for
+# a dashboard log entry (no items, no total, no customer name).
+_ON_EVENT = None
+
+
+def set_event_hook(fn):
+    """Register fn(event_dict) to be called on every completed sale.
+    Pass None to clear it."""
+    global _ON_EVENT
+    _ON_EVENT = fn
 
 
 def _get_model():
@@ -418,6 +449,10 @@ def run_checkout(camera_index=None):
         # removal outside checkout, etc.) rather than something to hide.
         for item in items:
             add_stock(item["name"], -item["qty"])
+
+        if _ON_EVENT:
+            _ON_EVENT({"staff_id": staff_id, "name": customer_name,
+                       "items": items, "total": total_amount})
 
         print("\n" + "=" * 56)
         print("           FLOWPOS -- RECEIPT")

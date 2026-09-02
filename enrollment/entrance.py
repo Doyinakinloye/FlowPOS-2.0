@@ -108,6 +108,23 @@ from services.shopping_session import (
 # Global control flag for the entrance loop
 ENTRANCE_RUNNING = True
 
+# Optional hook, set via set_event_hook(). Fires exactly once per
+# issued PIN (returning-customer match OR fresh enrollment), with
+# {"is_new": bool, "name": str, "staff_id": str, "pin": str}. Does
+# nothing by default -- purely additive, zero effect on the terminal
+# flow unless something (sis_server.py) explicitly registers a hook.
+# NOT a return-value change: start_entrance_engine() loops internally
+# forever by design, so returning per-event would make main.py's
+# outer loop reconnect the camera after every single customer.
+_ON_EVENT = None
+
+
+def set_event_hook(fn):
+    """Register fn(event_dict) to be called on every match/enrollment
+    PIN issuance. Pass None to clear it."""
+    global _ON_EVENT
+    _ON_EVENT = fn
+
 RECOGNIZE_STABLE_SECONDS = 1.0  # face must hold steady (centered) this long before matching
 MAX_RECOGNITION_FAILURES = 3    # consecutive failed embedding extractions before a visible failure message
 RECOGNITION_FAIL_COOLDOWN = 3.0 # brief pause after MAX_RECOGNITION_FAILURES, before re-arming
@@ -249,6 +266,9 @@ def start_entrance_engine(camera_index=0):
                             if match:
                                 pin = create_session(match["staff_id"], match["name"])
                                 print(f"\n✅ Welcome Customer {match['staff_id']}! Session PIN: {pin}")
+                                if _ON_EVENT:
+                                    _ON_EVENT({"is_new": False, "name": match["name"],
+                                               "staff_id": match["staff_id"], "pin": pin})
                                 cooldown_lines = [
                                     f"Welcome Customer {match['staff_id']}!",
                                     f"Your checkout PIN: {pin}",
@@ -289,6 +309,9 @@ def start_entrance_engine(camera_index=0):
                                     if new_customer:
                                         pin = create_session(new_customer["staff_id"], new_customer["name"])
                                         print(f"\n✅ Welcome Customer {new_customer['staff_id']}! Session PIN: {pin}")
+                                        if _ON_EVENT:
+                                            _ON_EVENT({"is_new": True, "name": new_customer["name"],
+                                                       "staff_id": new_customer["staff_id"], "pin": pin})
                                         cooldown_lines = [
                                             f"Welcome Customer {new_customer['staff_id']}!",
                                             f"Your checkout PIN: {pin}",

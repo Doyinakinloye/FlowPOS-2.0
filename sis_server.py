@@ -1,30 +1,50 @@
 """
 sis_server.py
 ═════════════════════════════════════════════════════════════════════
-Flask backend for the Smart Inventory System dashboard (index.html).
+Flask backend for the FlowPOS 2.0 web UI.
 
 REWRITTEN to drive the CURRENT architecture (entrance.py + PIN-based
 shopping_session.py) instead of the old tripwire pipeline (m2's
-AccessController + station_bridge's StationBridge). Camera 2 / item
-detection / billing is NOT wired here yet — that's the Checkout flow,
-which hasn't been built. This server auto-billing simply stays off
-until then; item detection is preview-only.
+AccessController + station_bridge's StationBridge).
 
-Key mechanism: EntranceEngine runs run_entrance(stream_url) in a loop
-on a background thread — the exact same pattern main.py's
-_entrance_loop uses. Its cv2.imshow calls are redirected into the
-browser (same trick as before, now matching "Entrance"/"Enrollment"
-window titles instead of "Recognition"/"Item Detection").
+UPDATED 2026-09-02 -- Checkout (Camera 2) is now wired in too, using
+the exact same "don't touch the real, hardware-tested module" approach
+already used for entrance.py:
+  - checkout.py's window ("Camera 2 - Item Scanner") is routed into
+    STATE.det_jpeg by the same cv2.imshow redirect entrance.py uses,
+    just matching a different window-name substring.
+  - checkout.py's PIN prompt AND its own camera-source prompt (both
+    plain input() calls) are picked up automatically by the SAME
+    generic input broker built for enrollment's name prompt -- it
+    doesn't care what the prompt text is, only that input() was
+    called from a background thread. No new code was needed for this
+    part, just running checkout in one.
+  - checkout.py's interactive keys ('C'/'A'/'R'/'Q') needed something
+    genuinely new though: the old cv2.waitKey redirect only ever
+    returned "no key" or a forced stop, with no way to tell it "the
+    Accept button was clicked." Added a small _PENDING_KEY relay for
+    this -- POST a key to /api/checkout/key, the next cv2.waitKey()
+    call inside checkout.py returns it once, then goes back to "no
+    key" until another one arrives. Confirmed safe to share globally
+    (not scoped per-engine) because checkout.py always runs with
+    entrance PAUSED (pause_entrance()/is_entrance_paused()) -- so
+    entrance is never also calling cv2.waitKey() at the same time.
+  - Both entrance.py and checkout.py now have an optional event hook
+    (set_event_hook()) added specifically for this dashboard -- fires
+    once per real event (a PIN issued, a sale completed) rather than
+    depending on either function's return value, which would have
+    required them to stop and restart their loops far more often than
+    is safe for the terminal experience. See each file's own comments
+    for why. This REPLACES the old _record_result()-on-return-value
+    approach below, which could only ever fire once per engine
+    start/stop (not per customer), regardless of what run_entrance()
+    returned -- a pre-existing gap, not something this update broke.
 
-The one wrinkle: run_enrollment() (called automatically by
-run_entrance() when someone isn't recognized) uses plain input() for
-its name/retry prompts — this is a real terminal interaction, and a
-web server has no terminal. Rather than touch entrance.py or
-enrollment.py at all, this file monkey-patches builtins.input the
-same way it already monkey-patches cv2 functions: when input() is
-called from a BACKGROUND thread (never the Flask request thread), it
-pauses that thread and waits for the browser to POST an answer via
-/api/enrollment/answer. Flask itself never blocks.
+The UI itself is never expected to need a terminal or a keyboard --
+every interaction (PIN entry, name entry, Accept/Rescan/Cancel) is a
+real button or text box in the browser; this file's job is entirely
+the translation layer connecting web actions to the same, unmodified
+recognize/enroll/checkout code already tested on real hardware.
 
 Run it from the project root (same folder as main.py):
     python sis_server.py
@@ -59,14 +79,17 @@ from services.enrollment_manager import startup, generate_staff_id
 from camera_stream import CameraStream
 from face_db import (
     get_all_customers, delete_customer, customer_exists,
-    rename_unknown_customer,
+    rename_unknown_customer, get_all_transactions,
 )
 from embedding_loader import remove_embedding_from_memory
 from enrollment.entrance import run_entrance
+import enrollment.entrance as entrance
+import checkout.checkout as checkout_flow
 from services.shopping_session import (
     init_shopping_sessions_table,
     list_active_sessions,
 )
+from services.inventory import get_inventory
 from m4.price_catalog import PRICES   # display-only, for the System Info / catalog panel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -133,12 +156,21 @@ def _resolve_cam(value, default_index):
 
 # ════════════════════════════════════════════════════════════════
 #  cv2 → browser redirect
-#  entrance.py and enrollment.py's real windows ("Smart Inventory -
-#  Entrance" / "Smart Inventory - Enrollment") get routed to the
-#  dashboard instead of a native popup. No changes to either file —
-#  we only intercept the OpenCV calls they already make.
+#  entrance.py, enrollment.py, and checkout.py's real windows
+#  ("Smart Inventory - Entrance" / "Smart Inventory - Enrollment" /
+#  "Camera 2 - Item Scanner") get routed to the dashboard instead of
+#  a native popup. No changes to any of those files — we only
+#  intercept the OpenCV calls they already make.
 # ════════════════════════════════════════════════════════════════
 _PIPELINE_STOP = threading.Event()
+
+# Set via /api/checkout/key -- consumed exactly once by the next
+# cv2.waitKey() call, then goes back to "no key". Shared globally
+# rather than scoped per-engine: safe because checkout.py always runs
+# with entrance PAUSED (pause_entrance()/is_entrance_paused()), so
+# entrance is never also calling cv2.waitKey() while a checkout key
+# is pending -- there's no other consumer to steal it.
+_PENDING_KEY = None
 
 def _cv2_imshow(winname, mat):
     w = str(winname)
@@ -148,13 +180,21 @@ def _cv2_imshow(winname, mat):
     if "Entrance" in w or "Enrollment" in w or "Recognition" in w:
         STATE.recog_jpeg = jpg
         STATE.recog_online = True
+    elif "Checkout" in w or "Item Scanner" in w:
+        STATE.det_jpeg = jpg
+        STATE.det_online = True
 
 def _cv2_waitkey(delay=1):
+    global _PENDING_KEY
     try:
         if delay and delay > 0:
             time.sleep(min(int(delay), 30) / 1000.0)
     except Exception:
         pass
+    if _PENDING_KEY is not None:
+        k = _PENDING_KEY
+        _PENDING_KEY = None
+        return k
     return ord('q') if _PIPELINE_STOP.is_set() else -1
 
 def _cv2_noop(*a, **k):
@@ -185,13 +225,15 @@ _install_cv2_redirect()
 
 
 # ════════════════════════════════════════════════════════════════
-#  INPUT BROKER
+#  INPUT BROKER (generic -- not enrollment-specific despite the
+#  original comment below; also used by checkout.py's PIN prompt and
+#  its own camera-source prompt)
 #  run_enrollment() (called automatically by run_entrance() when
 #  someone isn't recognized) uses plain input() for its name/retry
 #  prompts. This intercepts input() ONLY when called from a
 #  background thread (never Flask's own request thread) and routes
 #  the prompt to the browser, blocking that background thread until
-#  /api/enrollment/answer is POSTed. Flask stays fully responsive.
+#  /api/input/answer is POSTed. Flask stays fully responsive.
 # ════════════════════════════════════════════════════════════════
 _INPUT_STATE = {"waiting": False, "prompt": ""}
 _INPUT_EVENT = threading.Event()
@@ -249,34 +291,14 @@ class EntranceEngine:
     def _loop(self, stream_url):
         while self.running and not _PIPELINE_STOP.is_set():
             try:
-                result = run_entrance(stream_url)
+                run_entrance(stream_url)
             except Exception as e:
                 import traceback; traceback.print_exc()
                 print(f"[server] entrance loop error: {e}")
                 time.sleep(2)
                 continue
-            self._record_result(result)
         STATE.recog_online = False
         print("[server] Entrance loop stopped.")
-
-    def _record_result(self, result):
-        with STATE.lock:
-            if result is None:
-                _push(STATE.recognition_log, {
-                    "timestamp": _now(), "event": "NO_CHECKIN",
-                    "name": None, "customer_id": None,
-                    "confidence": None, "pin": None,
-                })
-            else:
-                ev = "NEW_CUSTOMER_ENROLLED" if result.get("is_new") else "CUSTOMER_IDENTIFIED"
-                _push(STATE.recognition_log, {
-                    "timestamp": _now(), "event": ev,
-                    "name": result.get("name"),
-                    "customer_id": result.get("staff_id"),
-                    "confidence": None,
-                    "pin": result.get("pin"),
-                })
-        STATE.events_fired += 1
 
     def stop(self):
         with self.lock:
@@ -365,6 +387,78 @@ class PreviewStreamer:
 
 
 PREVIEW = PreviewStreamer()
+
+
+# ════════════════════════════════════════════════════════════════
+#  EVENT HOOKS — real per-event dashboard logging.
+#  Registered once at startup (bottom of this file). Each fires
+#  exactly once per real event, straight from entrance.py/checkout.py
+#  themselves -- see this file's top docstring for why this replaced
+#  the old return-value approach.
+# ════════════════════════════════════════════════════════════════
+def _on_entrance_event(ev):
+    with STATE.lock:
+        event_type = "NEW_CUSTOMER_ENROLLED" if ev.get("is_new") else "CUSTOMER_IDENTIFIED"
+        _push(STATE.recognition_log, {
+            "timestamp": _now(), "event": event_type,
+            "name": ev.get("name"), "customer_id": ev.get("staff_id"),
+            "confidence": None, "pin": ev.get("pin"),
+        })
+    STATE.events_fired += 1
+
+
+def _on_checkout_event(ev):
+    with STATE.lock:
+        _push(STATE.recognition_log, {
+            "timestamp": _now(), "event": "CHECKOUT_COMPLETE",
+            "name": ev.get("name"), "customer_id": ev.get("staff_id"),
+            "confidence": None, "pin": None,
+            "items": ev.get("items"), "total": ev.get("total"),
+        })
+    STATE.events_fired += 1
+
+
+# ════════════════════════════════════════════════════════════════
+#  CHECKOUT ENGINE — Camera 2. Runs the real, unmodified
+#  checkout.run_checkout() in a background thread. Its PIN prompt and
+#  its own camera-source prompt are both picked up automatically by
+#  the generic input broker above -- no special-casing needed here,
+#  the broker doesn't care what the prompt text is.
+# ════════════════════════════════════════════════════════════════
+class CheckoutEngine:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.running = False
+        self.last_result = None
+        self._thread = None
+
+    def start(self):
+        with self.lock:
+            if self.running:
+                return False, "A checkout is already in progress."
+            self.running = True
+            self.last_result = None
+            STATE.det_jpeg = None
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+            return True, "Checkout started."
+
+    def _run(self):
+        try:
+            self.last_result = checkout_flow.run_checkout()
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            print(f"[server] checkout error: {e}")
+            self.last_result = False
+        finally:
+            with self.lock:
+                self.running = False
+            STATE.det_online = False
+
+
+CHECKOUT_ENGINE = CheckoutEngine()
+entrance.set_event_hook(_on_entrance_event)
+checkout_flow.set_event_hook(_on_checkout_event)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -460,14 +554,18 @@ def api_stats():
     enrolled = sum(1 for c in customers if not str(c["staff_id"]).startswith("UNK-"))
     unknown  = sum(1 for c in customers if str(c["staff_id"]).startswith("UNK-"))
     sessions = list_active_sessions()
+
+    # Real numbers now that checkout is wired in -- filtered to
+    # today's date from each transaction's own timestamp.
+    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    todays_txns = [t for t in get_all_transactions() if t.get("timestamp", "").startswith(today_str)]
+
     return jsonify({
         "enrolled_customers": enrolled,
         "unknown_captures": unknown,   # stays 0 under the current architecture
         "active_sessions": len(sessions),
-        # Transactions/revenue have no data source until Checkout (Camera 2)
-        # is built — left at 0 rather than faked.
-        "transactions_today": 0,
-        "revenue_today": 0,
+        "transactions_today": len(todays_txns),
+        "revenue_today": sum(t.get("total", 0) for t in todays_txns),
         "cameras": {
             "recognition": STATE.recog_online,
             "detection": STATE.det_online,
@@ -566,8 +664,7 @@ def api_pipeline_stop():
 def api_pipeline_status():
     return jsonify({
         "running": ENGINE.running,
-        # Auto-billing doesn't exist yet — no Checkout flow built.
-        "auto_billing": False,
+        "checkout_running": CHECKOUT_ENGINE.running,
     })
 
 
@@ -580,14 +677,17 @@ def api_next_id():
         return jsonify({"staff_id": ""})
 
 
-@app.route("/api/enrollment/status")
-def api_enroll_status():
+@app.route("/api/input/status")
+def api_input_status():
     """
-    Polled by the dashboard. When the automatic walk-up flow hits an
-    unrecognized face, run_enrollment() will be mid-input() waiting
-    on the browser — this surfaces that prompt so the UI can show a
-    text box and let the person type their name (or answer a retry
-    prompt) without ever touching a terminal.
+    Polled by the dashboard. This is the GENERIC input broker status --
+    not enrollment-specific despite living near the enrollment routes.
+    Anything running in a background thread that calls input() shows
+    up here: enrollment's name prompt, checkout's PIN prompt, and
+    checkout's own camera-source prompt (its first use only, before
+    the source gets cached) all flow through this same mechanism.
+    The UI should show a text box for whatever "prompt" says, without
+    needing to know which of those three it actually is.
     """
     return jsonify({
         "waiting_for_input": _INPUT_STATE["waiting"],
@@ -595,8 +695,8 @@ def api_enroll_status():
     })
 
 
-@app.route("/api/enrollment/answer", methods=["POST"])
-def api_enroll_answer():
+@app.route("/api/input/answer", methods=["POST"])
+def api_input_answer():
     data = request.get_json(silent=True) or {}
     answer = data.get("answer", "")
     if not _INPUT_STATE["waiting"]:
@@ -604,6 +704,55 @@ def api_enroll_answer():
     _INPUT_STATE["answer"] = answer
     _INPUT_EVENT.set()
     return jsonify({"ok": True})
+
+
+# ── checkout (Camera 2) ────────────────────────────────────────────
+@app.route("/api/checkout/start", methods=["POST"])
+def api_checkout_start():
+    ok, msg = CHECKOUT_ENGINE.start()
+    return jsonify({"ok": ok, "message": msg}), (200 if ok else 409)
+
+
+@app.route("/api/checkout/status")
+def api_checkout_status():
+    """
+    Polled while a checkout is in progress. 'last_result' is None
+    while running, then True/False once it finishes -- the UI can use
+    that to show a brief confirmation before returning to idle.
+    """
+    return jsonify({
+        "running": CHECKOUT_ENGINE.running,
+        "last_result": CHECKOUT_ENGINE.last_result,
+    })
+
+
+@app.route("/api/checkout/key", methods=["POST"])
+def api_checkout_key():
+    """
+    Translates a browser button click into the keypress checkout.py
+    is already listening for on real hardware -- 'c' force-confirms a
+    scan, 'a' accepts and pays, 'r' rescans, 'q' cancels. The UI never
+    needs to show or know about any of these letters; each maps to
+    one clearly-labeled button.
+    """
+    data = request.get_json(silent=True) or {}
+    key = (data.get("key") or "").strip().lower()
+    if key not in ("c", "a", "r", "q"):
+        return jsonify({"ok": False, "error": "Invalid key"}), 400
+    global _PENDING_KEY
+    _PENDING_KEY = ord(key)
+    return jsonify({"ok": True})
+
+
+# ── transactions / inventory ────────────────────────────────────────
+@app.route("/api/transactions")
+def api_transactions():
+    return jsonify(get_all_transactions())
+
+
+@app.route("/api/inventory")
+def api_inventory():
+    return jsonify(get_inventory())
 
 
 # ── system info ──────────────────────────────────────────────────
@@ -616,7 +765,7 @@ def api_system_info():
         "detection_cam": det,
         "face_detection": "MediaPipe (via enrollment.py's shared pipeline)",
         "face_recognition": "DeepFace · ArcFace (centroid match, entrance.py)",
-        "object_detection": "Not yet active — Checkout (Camera 2) not built",
+        "object_detection": "YOLOv8 (best.pt, via checkout.py)",
         "enrollment_poses": ["Straight", "Left", "Right", "Up", "Down"],
         "recognition_threshold": None,  # not runtime-adjustable under entrance.py yet
         "database": "SQLite (inventory.db)",
