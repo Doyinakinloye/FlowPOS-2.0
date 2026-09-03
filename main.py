@@ -27,6 +27,19 @@ before). Verified with real background threads: a simulated 'Q'
 press no longer triggers a retry, stop_entrance() now interrupts a
 genuinely blocked fake loop, and a real connection-failure case still
 retries same as always -- no regression there.
+
+UPDATED 2026-09-02 (web UI integration) -- `python main.py` alone now
+starts the web dashboard too (sis_server.py's Flask app, in a
+background thread), so there's no longer a separate `python
+sis_server.py` step. Importing sis_server here is what triggers its
+own module-level setup (the entrance/checkout event hooks it
+registers, the EntranceEngine/CheckoutEngine/PreviewStreamer objects)
+-- none of that is heavy (no camera opens, no model loads), so it
+doesn't add noticeable startup delay. Only the actual app.run() call,
+started explicitly in start_web_server() below, does the real work.
+Running `python sis_server.py` on its own AT THE SAME TIME as
+`python main.py` will now fail with a port-5000-already-in-use error
+-- expected, since main.py already occupies it; just don't run both.
 """
 
 import threading
@@ -43,10 +56,41 @@ from services.shopping_session import init_shopping_sessions_table
 
 from checkout.checkout import run_checkout
 
+import sis_server
+
 # State variables to manage background execution
 ENTRANCE_THREAD = None
 ENTRANCE_RUNNING = False
 ENTRANCE_STREAM_URL = None  # set by the get_stream_url() prompt on first start_entrance() call
+
+
+def start_web_server():
+    """Starts the Flask dashboard (sis_server.py) in a background
+    thread so `python main.py` alone gives you both the terminal menu
+    and the web UI at http://localhost:5000. If port 5000 is already
+    taken (most likely because `python sis_server.py` is ALSO running
+    separately somewhere), this prints a clear message instead of a
+    raw traceback -- an exception inside a background thread doesn't
+    crash the rest of the program, so the terminal menu keeps working
+    fine either way, just without the dashboard reachable."""
+    def _run_server():
+        try:
+            sis_server.app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)
+        except (OSError, SystemExit):
+            # Werkzeug (Flask's dev server) doesn't cleanly raise OSError on
+            # a bind failure -- confirmed by testing directly: it prints its
+            # own diagnostic message straight to stderr and calls
+            # sys.exit(1), which raises SystemExit, not OSError. Catching
+            # only OSError here would silently miss this exact case.
+            # SystemExit's own message is just the numeric exit code (not
+            # useful to print), and Werkzeug already printed its own real
+            # reason just above -- this only adds the friendlier next step.
+            print("\n⚠️  Web dashboard could not start on port 5000 (see the error above).")
+            print("   Is 'python sis_server.py' already running separately in another terminal? Close it and restart main.py.")
+
+    thread = threading.Thread(target=_run_server, daemon=True)
+    thread.start()
+    print("🌐 Web dashboard starting at http://localhost:5000")
 
 
 def start_entrance():
@@ -111,6 +155,10 @@ def main():
     startup()
     init_shopping_sessions_table()
 
+    # Web dashboard starts alongside the terminal -- one command now
+    # gives you both.
+    start_web_server()
+
     # Camera 1 auto-starts -- no manual menu step needed.
     start_entrance()
 
@@ -124,7 +172,7 @@ def main():
         print("  2. Stop Entrance Engine  (Release Camera)")
         print()
         print("OPERATIONS:")
-        print("  3. Run Checkout Flow (Camera 2 - Coming Next)")
+        print("  3. Run Checkout Flow (Camera 2)")
         print()
         print("SYSTEM & MANAGEMENT:")
         print("  4. System Info")

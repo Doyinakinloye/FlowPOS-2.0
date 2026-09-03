@@ -74,11 +74,30 @@ def _generate_unique_pin():
 
 
 def create_session(customer_id, customer_name):
-    """Start a new shopping session and return 4-digit PIN."""
+    """
+    Start a new shopping session and return a 4-digit PIN. If this
+    customer already has an active session (e.g. they were recognized
+    again before ever checking out from a previous visit), reuses that
+    existing PIN instead of creating a duplicate row -- without this,
+    every re-recognition of the same person created a brand new
+    'active' session that never expired, since the only thing that
+    ever closes one is a completed checkout. That's what was silently
+    inflating "Shopping right now" over repeated testing.
+    """
     init_shopping_sessions_table()
-    pin = _generate_unique_pin()
     conn = _get_conn()
     cursor = conn.cursor()
+    cursor.execute('''
+        SELECT pin FROM shopping_sessions
+        WHERE customer_id = ? AND status = 'active'
+        ORDER BY id DESC LIMIT 1
+    ''', (customer_id,))
+    existing = cursor.fetchone()
+    if existing is not None:
+        conn.close()
+        return existing[0]
+
+    pin = _generate_unique_pin()
     cursor.execute('''
         INSERT INTO shopping_sessions
             (pin, customer_id, customer_name, status, created_at)

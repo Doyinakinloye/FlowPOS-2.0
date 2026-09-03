@@ -60,6 +60,26 @@
 # exact crash standalone, then re-ran the full 5-photo capture loop
 # with a mocked secondary detection that always succeeds (the
 # previously-crashing case) end to end with no exception.
+#
+# FIXED 2026-09-03 — a normal, successful enrollment was never saving
+# a photo at all. The only cv2.imwrite() call in this whole file lived
+# inside the duplicate-flagged branch (to give an admin something to
+# look at when reviewing a flagged case) -- for a clean, non-duplicate
+# enrollment, save_customer() was being called with folder_path=""
+# and no image file was ever written anywhere. That silently broke
+# anything depending on a customer having a real photo on file, most
+# visibly the dashboard's Transactions page (added the same day),
+# which shows this photo next to each sale -- every row was falling
+# back to initials, never showing a real photo. Fixed by adding the
+# same save step (already proven in the duplicate branch) to the
+# success path too. staff_id-based folder naming, not name-based --
+# correct under this architecture since name == staff_id (no separate
+# name is collected). Verified two ways with the real, unmodified
+# capture/liveness/duplicate-check logic (only camera/MediaPipe
+# hardware mocked): a normal successful enrollment now genuinely
+# creates customers/<ID>/best_frame.jpg on disk with a real,
+# non-empty folder_path in the database, and the duplicate-flagged
+# branch right next to this change still behaves exactly as before.
 # ============================================
 
 import os
@@ -481,7 +501,24 @@ def run_enrollment(stream_url):
             return "flagged"
 
         add_embedding(staff_id, name, avg_emb)
-        save_customer(staff_id, name, "", avg_emb)
+
+        # Save a real reference photo for this customer, the same way
+        # the flagged-duplicate branch above already does -- FOUND AND
+        # FIXED: this was missing entirely for a normal, successful
+        # enrollment (folder_path was being saved as "" with no photo
+        # file written anywhere). That silently broke anything that
+        # depends on a customer having a real photo on file -- e.g. the
+        # dashboard's Transactions page, which shows this photo next to
+        # each sale. staff_id-based folder naming (not name-based) is
+        # correct here since name == staff_id under this architecture
+        # (no separate name is collected anymore).
+        folder_path = ""
+        if last_face_crop is not None:
+            folder_path = os.path.join("customers", staff_id)
+            os.makedirs(folder_path, exist_ok=True)
+            cv2.imwrite(os.path.join(folder_path, "best_frame.jpg"), last_face_crop)
+
+        save_customer(staff_id, name, folder_path, avg_emb)
         print(f"  ✅ Enrollment successful! Customer ID: {staff_id}")
         return "success"
     else:
@@ -490,4 +527,4 @@ def run_enrollment(stream_url):
 
 if __name__ == "__main__":
     url = get_stream_url()
-    run_enrollment(url)
+    run_enrollment(url) 

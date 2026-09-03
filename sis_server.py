@@ -40,6 +40,40 @@ already used for entrance.py:
     start/stop (not per customer), regardless of what run_entrance()
     returned -- a pre-existing gap, not something this update broke.
 
+UPDATED 2026-09-02 (later same day) -- added three inventory-editing
+routes (add-stock/set-stock/set-price). Without them, "the admin never
+needs the terminal" was false specifically for inventory management --
+the web UI could view stock but never actually change it. Each just
+wraps the same, already-tested services/inventory.py functions the
+terminal admin panel uses.
+
+UPDATED 2026-09-03 -- checkout.py has its OWN separate camera-source
+cache (_CHECKOUT_STREAM_SOURCE), asked once via a hidden terminal-style
+prompt and never touchable from the browser -- completely disconnected
+from the "Camera 2 -- Checkout" field on the Cameras page, which only
+ever affected entrance/preview. CheckoutEngine.start() now pre-seeds
+checkout.py's cache from STATE.detection_cam (the Cameras page value)
+right before starting, whenever the admin has actually set one.
+
+FIXED 2026-09-03 (same day) -- real bug, found from screen recordings
+and confirmed by direct reproduction with checkout's own unmodified
+scanning code: _PIPELINE_STOP is meant ONLY to let the entrance engine's
+Stop button interrupt a blocked cv2.waitKey() call. But cv2.waitKey is
+patched globally, so checkout.py's own scanning loop was ALSO reading
+it -- and treating a stale "entrance was stopped" signal exactly like a
+real 'Q' keypress. If entrance had ever been stopped and not restarted
+before a checkout began, the very first waitKey() call inside checkout's
+scan loop would return 'q' and cancel instantly -- after showing exactly
+one real frame with real detections, then reverting. That matches the
+reported symptom precisely: camera opens, items are visible, gone in a
+blink. Fixed by only honoring _PIPELINE_STOP when CHECKOUT_ENGINE isn't
+running -- entrance is always fully paused (not calling cv2.waitKey at
+all) during an active checkout, so this changes nothing for entrance's
+own stop behavior. Verified three ways: reproduced the failure with
+checkout's real _run_one_scan_attempt() before the fix, confirmed it no
+longer fails after the fix (same poisoned state), and confirmed entrance's
+own stop signal still works correctly when checkout isn't running.
+
 The UI itself is never expected to need a terminal or a keyboard --
 every interaction (PIN entry, name entry, Accept/Rescan/Cancel) is a
 real button or text box in the browser; this file's job is entirely
@@ -89,7 +123,7 @@ from services.shopping_session import (
     init_shopping_sessions_table,
     list_active_sessions,
 )
-from services.inventory import get_inventory
+from services.inventory import get_inventory, add_stock, set_stock_quantity, set_price
 from m4.price_catalog import PRICES   # display-only, for the System Info / catalog panel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -195,7 +229,22 @@ def _cv2_waitkey(delay=1):
         k = _PENDING_KEY
         _PENDING_KEY = None
         return k
-    return ord('q') if _PIPELINE_STOP.is_set() else -1
+    # _PIPELINE_STOP belongs to the entrance engine ONLY -- but cv2.waitKey
+    # itself is patched globally, so checkout.py's own scanning loop was
+    # ALSO seeing it, and treating it exactly like a real 'Q' keypress.
+    # Confirmed by direct reproduction: if entrance was ever stopped and
+    # never restarted before a checkout began, _PIPELINE_STOP stays set,
+    # and checkout's real _run_one_scan_attempt() returns "cancelled"
+    # on its very first loop -- after showing exactly one real frame with
+    # real detections, then reverting instantly. That matches the report
+    # precisely: camera opens, items are visible, then it's gone in a
+    # blink. Entrance is always fully paused (not calling cv2.waitKey at
+    # all) while a checkout is running, so it's safe to simply not apply
+    # this signal during that window -- only an explicit checkout key
+    # (handled above) should ever be able to end a checkout.
+    if _PIPELINE_STOP.is_set() and not CHECKOUT_ENGINE.running:
+        return ord('q')
+    return -1
 
 def _cv2_noop(*a, **k):
     return None
@@ -436,6 +485,20 @@ class CheckoutEngine:
         with self.lock:
             if self.running:
                 return False, "A checkout is already in progress."
+
+            # If the admin has set a Camera 2 address on the Cameras
+            # page, hand it to checkout.py's own camera-source cache
+            # right now, before anything else runs. checkout.py itself
+            # is completely untouched by this -- it still just checks
+            # "is my cache empty?" the same way it always has; this
+            # only makes sure that check finds something real instead
+            # of a stale value from whenever it first got asked. If
+            # the admin hasn't set anything here, this does nothing,
+            # and checkout falls back to its own original one-time
+            # prompt exactly as before.
+            if STATE.detection_cam:
+                checkout_flow._CHECKOUT_STREAM_SOURCE = _resolve_cam(STATE.detection_cam, 1)
+
             self.running = True
             self.last_result = None
             STATE.det_jpeg = None
@@ -753,6 +816,42 @@ def api_transactions():
 @app.route("/api/inventory")
 def api_inventory():
     return jsonify(get_inventory())
+
+
+@app.route("/api/inventory/add-stock", methods=["POST"])
+def api_inventory_add_stock():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("item_name") or "").strip().lower()
+    try:
+        qty = int(data.get("quantity"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Quantity must be a whole number."}), 400
+    ok = add_stock(name, qty)
+    return jsonify({"ok": bool(ok)}), (200 if ok else 404)
+
+
+@app.route("/api/inventory/set-stock", methods=["POST"])
+def api_inventory_set_stock():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("item_name") or "").strip().lower()
+    try:
+        qty = int(data.get("quantity"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Quantity must be a whole number."}), 400
+    ok = set_stock_quantity(name, qty)
+    return jsonify({"ok": bool(ok)}), (200 if ok else 404)
+
+
+@app.route("/api/inventory/set-price", methods=["POST"])
+def api_inventory_set_price():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("item_name") or "").strip().lower()
+    try:
+        price = float(data.get("price"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Price must be a number."}), 400
+    ok = set_price(name, price)
+    return jsonify({"ok": bool(ok)}), (200 if ok else 404)
 
 
 # ── system info ──────────────────────────────────────────────────

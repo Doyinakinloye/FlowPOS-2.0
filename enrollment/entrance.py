@@ -132,6 +132,7 @@ COOLDOWN_SECONDS         = 8.0  # how long a success message (incl. the PIN) sta
 NEW_CUSTOMER_NOTICE_SEC  = 1.5  # how long "New Customer Detected" shows before handing off to enrollment
 
 COL_GREEN  = (0, 220, 0)
+COL_BLACK  = (0, 0, 0)  # used for the Welcome/PIN success text specifically -- green washed out against some backgrounds
 COL_YELLOW = (0, 220, 255)
 COL_GRAY   = (140, 140, 140)
 COL_WHITE  = (255, 255, 255)
@@ -274,7 +275,7 @@ def start_entrance_engine(camera_index=0):
                                     f"Your checkout PIN: {pin}",
                                     "(valid for this shopping session only)",
                                 ]
-                                cooldown_color = COL_GREEN
+                                cooldown_color = COL_BLACK
                                 cooldown_until = time.time() + COOLDOWN_SECONDS
                                 stable_since = None
                             else:
@@ -317,10 +318,10 @@ def start_entrance_engine(camera_index=0):
                                             f"Your checkout PIN: {pin}",
                                             "(valid for this shopping session only)",
                                         ]
-                                        cooldown_color = COL_GREEN
+                                        cooldown_color = COL_BLACK
                                     else:
                                         cooldown_lines = ["Enrollment complete!"]
-                                        cooldown_color = COL_GREEN
+                                        cooldown_color = COL_BLACK
                                 elif enrollment_result == "flagged":
                                     print("\n⚠️ Enrollment flagged for admin review — no PIN issued.")
                                     cooldown_lines = [
