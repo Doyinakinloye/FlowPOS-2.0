@@ -1,4 +1,3 @@
-@'
 # FlowPOS 2.0
 
 A computer-vision-based retail point-of-sale system for small shops. Camera 1 recognizes customers walking in and issues them a shopping PIN. Camera 2 scans their items at checkout using object detection and completes the sale. A browser dashboard now handles almost everything — customers and staff barely ever need to touch a keyboard or the terminal.
@@ -223,34 +222,32 @@ A full, honest record of what was actually broken and how it was resolved — ev
 ---
 
 ## Project Structure
-
-```
 FlowPOS_2.0/
-├── main.py                      # Entry point — starts terminal menu + web dashboard together
-├── sis_server.py                 # Flask backend for the web dashboard
-├── index.html                    # Web dashboard frontend
-├── camera_stream.py               # Camera connection handling (webcam / IP Webcam)
-├── face_db.py                     # Customer + transaction database access
-├── embedding_loader.py            # In-memory face embedding cache
-├── duplicate_checker.py           # Duplicate-enrollment detection
-├── inventory.db                   # SQLite database
+├── main.py # Entry point — starts terminal menu + web dashboard together
+├── sis_server.py # Flask backend for the web dashboard
+├── index.html # Web dashboard frontend
+├── camera_stream.py # Camera connection handling (webcam / IP Webcam)
+├── face_db.py # Customer + transaction database access
+├── embedding_loader.py # In-memory face embedding cache
+├── duplicate_checker.py # Duplicate-enrollment detection
+├── inventory.db # SQLite database
 ├── models/
-│   └── yolov8n.pt                 # Trained item-detection model
-├── customers/                     # Saved customer reference photos
+│ └── yolov8n.pt # Trained item-detection model
+├── customers/ # Saved customer reference photos
 ├── enrollment/
-│   ├── entrance.py                # Camera 1 — recognize-or-enroll loop
-│   ├── enrollment.py              # New customer enrollment flow
-│   └── liveness.py                # Liveness / head-pose challenge
+│ ├── entrance.py # Camera 1 — recognize-or-enroll loop
+│ ├── enrollment.py # New customer enrollment flow
+│ └── liveness.py # Liveness / head-pose challenge
 ├── checkout/
-│   └── checkout.py                # Camera 2 — item scanning and payment flow
+│ └── checkout.py # Camera 2 — item scanning and payment flow
 ├── services/
-│   ├── enrollment_manager.py       # Staff ID generation, startup, flagged-duplicate storage
-│   ├── shopping_session.py         # PIN-based shopping session management
-│   └── inventory.py                # Stock and pricing management
+│ ├── enrollment_manager.py # Staff ID generation, startup, flagged-duplicate storage
+│ ├── shopping_session.py # PIN-based shopping session management
+│ └── inventory.py # Stock and pricing management
 ├── m4/
-│   └── price_catalog.py            # Item price list
-└── admin_panel.py                  # Terminal-based admin panel (legacy — most functions now also in the web dashboard)
-```
+│ └── price_catalog.py # Item price list
+└── admin_panel.py # Terminal-based admin panel (legacy — most functions now also in the web dashboard)
+
 
 ---
 
@@ -264,9 +261,7 @@ This single command starts both the terminal menu and the web dashboard together
 
 Open the dashboard in a browser:
 
-```
 http://localhost:5000
-```
+
 
 On first use, set your camera sources under **Admin Panel → Cameras** — leave a field blank to use the laptop's built-in webcam, or enter a phone's IP Webcam address to use that instead.
-'@ | Out-File -FilePath README.md -Encoding utf8 -NoNewline
